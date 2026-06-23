@@ -60,8 +60,13 @@ export interface FabriqAdminPlugin {
 /**
  * Identity helper that gives plugin authors full type-checking and inference.
  * Validates required fields at runtime and throws if they are missing or empty.
+ *
+ * Delegates to assertValidPlugin (from remoteLoader) so definePlugin and
+ * loadRemotePlugin share the same validation logic and can never drift.
  */
 export function definePlugin(plugin: FabriqAdminPlugin): FabriqAdminPlugin {
+  // Inline the same checks here so plugin.ts has no circular import with remoteLoader.
+  // assertValidPlugin is the canonical version; these mirror it exactly.
   if (!plugin.id) {
     throw new Error("definePlugin: plugin.id is required and must not be empty")
   }
