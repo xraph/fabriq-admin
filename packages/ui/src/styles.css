@@ -1,0 +1,116 @@
+/* @fabriq/ui — CSS-isolated Tailwind v4 stylesheet
+ * Isolation contract: NO selector targets html/body/:root/bare *.
+ * All tokens and base styles are scoped to .fabriq-admin.
+ */
+
+/* 1. Layer order — no @import "tailwindcss" (avoids global preflight) */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+
+/* 2. Dark variant keyed on the scoped root only */
+@custom-variant dark (&:where(.fabriq-admin[data-fabriq-theme="dark"], .fabriq-admin[data-fabriq-theme="dark"] *));
+
+/* 3. Light tokens — scoped to .fabriq-admin */
+.fabriq-admin {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(240 10% 3.9%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(240 10% 3.9%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(240 10% 3.9%);
+  --primary: hsl(240 5.9% 10%);
+  --primary-foreground: hsl(0 0% 98%);
+  --secondary: hsl(240 4.8% 95.9%);
+  --secondary-foreground: hsl(240 5.9% 10%);
+  --muted: hsl(240 4.8% 95.9%);
+  --muted-foreground: hsl(240 3.8% 46.1%);
+  --accent: hsl(240 4.8% 95.9%);
+  --accent-foreground: hsl(240 5.9% 10%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(240 5.9% 90%);
+  --input: hsl(240 5.9% 90%);
+  --ring: hsl(240 5.9% 10%);
+  --radius: 0.5rem;
+}
+
+/* 4. Dark tokens — scoped to .fabriq-admin[data-fabriq-theme="dark"] */
+.fabriq-admin[data-fabriq-theme="dark"] {
+  --background: hsl(240 10% 3.9%);
+  --foreground: hsl(0 0% 98%);
+  --card: hsl(240 10% 3.9%);
+  --card-foreground: hsl(0 0% 98%);
+  --popover: hsl(240 10% 3.9%);
+  --popover-foreground: hsl(0 0% 98%);
+  --primary: hsl(0 0% 98%);
+  --primary-foreground: hsl(240 5.9% 10%);
+  --secondary: hsl(240 3.7% 15.9%);
+  --secondary-foreground: hsl(0 0% 98%);
+  --muted: hsl(240 3.7% 15.9%);
+  --muted-foreground: hsl(240 5% 64.9%);
+  --accent: hsl(240 3.7% 15.9%);
+  --accent-foreground: hsl(0 0% 98%);
+  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(240 3.7% 15.9%);
+  --input: hsl(240 3.7% 15.9%);
+  --ring: hsl(240 4.9% 83.9%);
+}
+
+/* 5. Map CSS custom properties to Tailwind v4 design tokens */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+/* 6. Minimal scoped base reset — ONLY inside .fabriq-admin; no bare * / html / body */
+@layer base {
+  .fabriq-admin,
+  .fabriq-admin *,
+  .fabriq-admin *::before,
+  .fabriq-admin *::after {
+    box-sizing: border-box;
+  }
+  .fabriq-admin {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    color: var(--foreground);
+    background: var(--background);
+    line-height: 1.5;
+  }
+  .fabriq-admin button {
+    font: inherit;
+    color: inherit;
+  }
+  .fabriq-admin h1,
+  .fabriq-admin h2,
+  .fabriq-admin h3,
+  .fabriq-admin p,
+  .fabriq-admin figure {
+    margin: 0;
+  }
+  .fabriq-admin table {
+    border-collapse: collapse;
+  }
+}
