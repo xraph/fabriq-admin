@@ -1,6 +1,7 @@
 import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import federation from "@originjs/vite-plugin-federation"
+import tailwindcss from "@tailwindcss/vite"
 
 /**
  * Phase 1: remotes is empty — no remote plugins loaded at build time.
@@ -16,6 +17,7 @@ import federation from "@originjs/vite-plugin-federation"
  */
 export default defineConfig({
   plugins: [
+    tailwindcss(),
     react(),
     federation({
       name: "fabriq-host",

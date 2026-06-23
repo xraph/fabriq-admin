@@ -1,0 +1,6 @@
+@import "@fabriq/ui/styles.css";
+
+/* v4 skips symlinked node_modules — point at workspace sources so their utility classes compile */
+@source "../../../packages/ui/src";
+@source "../../../packages/admin-sdk/src";
+@source "../../../plugins/entity-browser/src";

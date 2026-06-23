@@ -10,6 +10,15 @@ import { FabriqProvider } from "./provider"
 import type { FabriqAdminPlugin } from "./plugin"
 import { PluginRegistry } from "./registry"
 import { matchRoute, useInternalRouter, type RouterState } from "./router"
+import { useResolvedTheme, type ThemeProp, type ResolvedTheme } from "./theme"
+import { resolveIcon } from "./icons"
+import { cn, Button, ScrollArea } from "@fabriq/ui"
+import {
+  Database,
+  Sun,
+  Moon,
+  LayoutDashboard,
+} from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // PluginHostContext
@@ -40,35 +49,110 @@ export function usePluginHost(): PluginHostValue {
 export interface FabriqAdminProps {
   client: FabriqClient
   plugins: FabriqAdminPlugin[]
-  theme?: "light" | "dark" | "system"
+  theme?: ThemeProp
   basePath?: string
   initialPath?: string
   queryClient?: QueryClient
 }
 
 // ---------------------------------------------------------------------------
-// Internal sub-components
+// AdminSidebar
 // ---------------------------------------------------------------------------
 
-function AdminNav({
+function AdminSidebar({
   registry,
   navigate,
+  path,
 }: {
   registry: PluginRegistry
   navigate: (to: string) => void
+  path: string
 }) {
   const items = registry.navItems()
-  if (items.length === 0) return null
+
   return (
-    <nav>
-      {items.map((item) => (
-        <button key={item.to} onClick={() => navigate(item.to)}>
-          {item.label}
-        </button>
-      ))}
-    </nav>
+    <aside
+      className="flex flex-col border-r border-border bg-card"
+      style={{ width: 240, minWidth: 240, flexShrink: 0 }}
+    >
+      {/* Brand row */}
+      <div className="flex items-center gap-2 px-4 h-14 border-b border-border">
+        <Database className="h-5 w-5 text-primary" aria-hidden="true" />
+        <span className="font-semibold text-sm tracking-tight text-foreground">fabriq</span>
+      </div>
+
+      {/* Nav items */}
+      <ScrollArea className="flex-1 py-2">
+        <nav aria-label="Admin navigation">
+          {items.map((item) => {
+            const isActive =
+              path === item.to || path.startsWith(item.to + "/")
+            const Icon = resolveIcon(item.icon)
+            return (
+              <button
+                key={item.to}
+                onClick={() => navigate(item.to)}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-3 w-full px-4 py-2 text-sm rounded-md mx-2 transition-colors",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  isActive
+                    ? "bg-accent text-accent-foreground font-medium"
+                    : "text-muted-foreground",
+                )}
+                style={{ width: "calc(100% - 16px)" }}
+              >
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {item.label}
+              </button>
+            )
+          })}
+        </nav>
+      </ScrollArea>
+    </aside>
   )
 }
+
+// ---------------------------------------------------------------------------
+// AdminHeader
+// ---------------------------------------------------------------------------
+
+function AdminHeader({
+  title,
+  resolved,
+  setOverride,
+}: {
+  title: string
+  resolved: ResolvedTheme
+  setOverride: (t: ResolvedTheme | null) => void
+}) {
+  const toggleTheme = () => {
+    setOverride(resolved === "dark" ? "light" : "dark")
+  }
+
+  return (
+    <header className="flex items-center justify-between px-6 h-14 border-b border-border bg-background shrink-0">
+      <span className="text-sm font-medium text-foreground">{title}</span>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={toggleTheme}
+        aria-label="Toggle theme"
+        className="h-8 w-8"
+      >
+        {resolved === "dark" ? (
+          <Sun className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Moon className="h-4 w-4" aria-hidden="true" />
+        )}
+      </Button>
+    </header>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// AdminMain
+// ---------------------------------------------------------------------------
 
 function AdminMain({
   registry,
@@ -78,14 +162,39 @@ function AdminMain({
   path: string
 }) {
   const match = matchRoute(registry.routes(), path)
+
   if (!match) {
-    return <main>Not found</main>
+    return (
+      <main className="flex-1 overflow-auto p-6">
+        <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-16">
+          <LayoutDashboard className="h-10 w-10 text-muted-foreground opacity-40" aria-hidden="true" />
+          <p className="text-muted-foreground text-sm">Not found</p>
+        </div>
+      </main>
+    )
   }
+
   const El = match.route.element as ComponentType<{ params?: Record<string, string> }>
   return (
-    <main>
+    <main className="flex-1 overflow-auto p-6">
       <El params={match.params} />
     </main>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// EmptyState
+// ---------------------------------------------------------------------------
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-16">
+      <Database className="h-10 w-10 text-muted-foreground opacity-40" aria-hidden="true" />
+      <p className="font-medium text-sm">No plugins loaded</p>
+      <p className="text-xs text-muted-foreground max-w-xs">
+        Register at least one plugin in the <code>plugins</code> prop to get started.
+      </p>
+    </div>
   )
 }
 
@@ -101,7 +210,7 @@ function AdminMain({
 export function FabriqAdmin({
   client,
   plugins,
-  theme,
+  theme = "system",
   basePath = "/admin",
   initialPath = "",
   queryClient,
@@ -121,17 +230,42 @@ export function FabriqAdmin({
     [registry, router.navigate, router.path],
   )
 
+  const { resolved, setOverride } = useResolvedTheme(theme)
+
+  // Derive section title from active nav item
+  const navItems = registry.navItems()
+  const activeItem = navItems.find(
+    (item) => router.path === item.to || router.path.startsWith(item.to + "/"),
+  )
+  const sectionTitle = activeItem?.label ?? "fabriq admin"
+
+  const hasPlugins = registry.all().length > 0
+
   return (
     <FabriqProvider client={client} queryClient={queryClient}>
       <PluginHostContext.Provider value={hostValue}>
-        <div className="fabriq-admin" data-fabriq-theme={theme ?? "system"}>
-          {registry.all().length === 0 ? (
-            <p>No plugins loaded</p>
-          ) : (
+        <div
+          className="fabriq-admin flex h-full w-full overflow-hidden"
+          data-fabriq-theme={resolved}
+        >
+          {hasPlugins ? (
             <>
-              <AdminNav registry={registry} navigate={router.navigate} />
-              <AdminMain registry={registry} path={router.path} />
+              <AdminSidebar
+                registry={registry}
+                navigate={router.navigate}
+                path={router.path}
+              />
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <AdminHeader
+                  title={sectionTitle}
+                  resolved={resolved}
+                  setOverride={setOverride}
+                />
+                <AdminMain registry={registry} path={router.path} />
+              </div>
             </>
+          ) : (
+            <EmptyState />
           )}
         </div>
       </PluginHostContext.Provider>
