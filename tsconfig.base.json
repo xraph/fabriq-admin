@@ -1,0 +1,3 @@
+{
+  "compilerOptions": { "target": "ES2022", "module": "ESNext", "moduleResolution": "Bundler", "jsx": "react-jsx", "strict": true, "declaration": true, "skipLibCheck": true, "esModuleInterop": true, "lib": ["ES2022", "DOM", "DOM.Iterable"] }
+}
