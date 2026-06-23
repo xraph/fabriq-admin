@@ -10,3 +10,10 @@ export { createHttpTransport, HttpTransportError } from "./httpTransport"
 export type { HttpTransportOptions } from "./httpTransport"
 export { loadRemotePlugin } from "./remoteLoader"
 export type { RemotePluginOptions } from "./remoteLoader"
+
+// --- experimental: live streaming (no Phase 1 backend) ---
+// FabriqTransport.stream, FabriqClient.watch(), and WatchScope are re-exported
+// via `export * from "./client"` above. They are valid forward infrastructure for
+// the planned /watch SSE endpoint but are NOT backed by the Phase 1 admin API —
+// see the doc comment on FabriqClient.watch() for details.
+// ----------------------------------------------------------

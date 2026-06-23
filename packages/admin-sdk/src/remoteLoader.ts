@@ -1,29 +1,5 @@
 import type { FabriqAdminPlugin } from "./plugin"
-
-// ---------------------------------------------------------------------------
-// assertValidPlugin — shared validation used by definePlugin AND loadRemotePlugin
-// ---------------------------------------------------------------------------
-
-/**
- * Validates that `candidate` has the required FabriqAdminPlugin fields.
- * Throws a descriptive Error if any required field is missing or empty.
- * Re-used by definePlugin so validation can never drift.
- */
-export function assertValidPlugin(candidate: unknown): asserts candidate is FabriqAdminPlugin {
-  if (!candidate || typeof candidate !== "object") {
-    throw new Error("loadRemotePlugin: resolved module is not an object")
-  }
-  const p = candidate as Record<string, unknown>
-  if (typeof p["id"] !== "string" || !p["id"]) {
-    throw new Error("loadRemotePlugin: plugin.id is required and must not be empty")
-  }
-  if (typeof p["name"] !== "string" || !p["name"]) {
-    throw new Error("loadRemotePlugin: plugin.name is required and must not be empty")
-  }
-  if (typeof p["version"] !== "string" || !p["version"]) {
-    throw new Error("loadRemotePlugin: plugin.version is required and must not be empty")
-  }
-}
+import { assertValidPlugin } from "./plugin"
 
 // ---------------------------------------------------------------------------
 // Module Federation container interface (minimal surface)

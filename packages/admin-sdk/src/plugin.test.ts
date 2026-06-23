@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import type * as React from "react"
-import { definePlugin } from "./plugin"
+import { definePlugin, assertValidPlugin } from "./plugin"
 import type { FabriqAdminPlugin } from "./plugin"
 
 // Minimal fake component element for type tests
@@ -31,6 +31,30 @@ describe("definePlugin", () => {
   it("throws when version is missing (empty string)", () => {
     expect(() =>
       definePlugin({ id: "fabriq.test", name: "Test", version: "" })
+    ).toThrow()
+  })
+
+  // FIX 3: definePlugin now delegates to assertValidPlugin — verify it catches
+  // non-object and bad-typed fields the same way assertValidPlugin does.
+  it("throws for null (non-object) — delegates to assertValidPlugin", () => {
+    expect(() => definePlugin(null as unknown as FabriqAdminPlugin)).toThrow()
+  })
+
+  it("throws when id is a number (non-string) — delegates to assertValidPlugin", () => {
+    expect(() =>
+      definePlugin({ id: 1 as unknown as string, name: "Test", version: "1.0.0" })
+    ).toThrow()
+  })
+
+  it("throws when name is a number (non-string) — delegates to assertValidPlugin", () => {
+    expect(() =>
+      definePlugin({ id: "fabriq.test", name: 42 as unknown as string, version: "1.0.0" })
+    ).toThrow()
+  })
+
+  it("throws when version is a number (non-string) — delegates to assertValidPlugin", () => {
+    expect(() =>
+      definePlugin({ id: "fabriq.test", name: "Test", version: 99 as unknown as string })
     ).toThrow()
   })
 

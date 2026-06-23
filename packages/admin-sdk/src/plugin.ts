@@ -1,5 +1,32 @@
 import type * as React from "react"
 
+// ---------------------------------------------------------------------------
+// assertValidPlugin — canonical, shared validator
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates that `candidate` has the required FabriqAdminPlugin fields.
+ * Throws a descriptive Error if any required field is missing, non-string, or empty.
+ *
+ * This is THE single source of truth for plugin validation. Both `definePlugin`
+ * and `loadRemotePlugin` (in remoteLoader.ts) delegate here so they can never drift.
+ */
+export function assertValidPlugin(candidate: unknown): asserts candidate is FabriqAdminPlugin {
+  if (!candidate || typeof candidate !== "object") {
+    throw new Error("assertValidPlugin: plugin must be a non-null object")
+  }
+  const p = candidate as Record<string, unknown>
+  if (typeof p["id"] !== "string" || !p["id"]) {
+    throw new Error("assertValidPlugin: plugin.id is required and must be a non-empty string")
+  }
+  if (typeof p["name"] !== "string" || !p["name"]) {
+    throw new Error("assertValidPlugin: plugin.name is required and must be a non-empty string")
+  }
+  if (typeof p["version"] !== "string" || !p["version"]) {
+    throw new Error("assertValidPlugin: plugin.version is required and must be a non-empty string")
+  }
+}
+
 /** A route contributed by a plugin. */
 export interface PluginRoute {
   /** Path relative to the admin mount base, e.g. "entities" or "entities/:id". */
@@ -59,22 +86,13 @@ export interface FabriqAdminPlugin {
 
 /**
  * Identity helper that gives plugin authors full type-checking and inference.
- * Validates required fields at runtime and throws if they are missing or empty.
+ * Validates required fields at runtime and throws if they are missing, non-string, or empty.
  *
- * Delegates to assertValidPlugin (from remoteLoader) so definePlugin and
- * loadRemotePlugin share the same validation logic and can never drift.
+ * Delegates to `assertValidPlugin` (defined above) — the single canonical validator
+ * shared with `loadRemotePlugin` in remoteLoader.ts. Both always use the same logic
+ * and can never drift.
  */
 export function definePlugin(plugin: FabriqAdminPlugin): FabriqAdminPlugin {
-  // Inline the same checks here so plugin.ts has no circular import with remoteLoader.
-  // assertValidPlugin is the canonical version; these mirror it exactly.
-  if (!plugin.id) {
-    throw new Error("definePlugin: plugin.id is required and must not be empty")
-  }
-  if (!plugin.name) {
-    throw new Error("definePlugin: plugin.name is required and must not be empty")
-  }
-  if (!plugin.version) {
-    throw new Error("definePlugin: plugin.version is required and must not be empty")
-  }
+  assertValidPlugin(plugin)
   return plugin
 }

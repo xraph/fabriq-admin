@@ -58,17 +58,19 @@ describe("FabriqClient", () => {
     transport.setRequestResponse(page)
 
     const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
-    const result = await client.listEntities({ tenant: "t1", type: "node", limit: 20, cursor: "tok" })
+    const result = await client.listEntities({ type: "node", limit: 20, cursor: "tok" })
 
     expect(result).toEqual(page)
     expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
     expect(transport.lastRequest?.path).toMatch(/\/entities$/)
     expect(transport.lastRequest?.query).toMatchObject({
-      tenant: "t1",
       type: "node",
       limit: 20,
       cursor: "tok",
     })
+    // FIX 2: tenant was a silent no-op (backend derives tenant from middleware, not
+    // query params) — it is no longer accepted or forwarded.
+    expect(transport.lastRequest?.query).not.toHaveProperty("tenant")
   })
 
   it("listEntities — works with no params", async () => {

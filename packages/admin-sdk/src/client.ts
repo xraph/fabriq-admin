@@ -72,7 +72,6 @@ export class FabriqClient {
 
   /** GET /entities */
   listEntities(params?: {
-    tenant?: string
     type?: string
     limit?: number
     cursor?: string
@@ -102,7 +101,15 @@ export class FabriqClient {
     })
   }
 
-  /** POST /watch — SSE delta stream */
+  /**
+   * EXPERIMENTAL — live delta stream over SSE.
+   *
+   * NOTE: The `/watch` endpoint is NOT part of the Phase 1 admin API
+   * (`forgeext/adminapi`). Calling this method against a Phase 1 backend will
+   * receive a 404. The SSE transport infrastructure is intentionally preserved
+   * as forward-compatible scaffolding; the endpoint is planned for a later phase
+   * once a live-query gateway is mounted at that path.
+   */
   watch(scope: WatchScope): AsyncIterable<unknown> {
     return this.transport.stream({
       path: `${this.baseUrl}/watch`,
