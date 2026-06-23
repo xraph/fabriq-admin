@@ -8,6 +8,10 @@ import {
 } from "@tanstack/react-query"
 import { FabriqClient } from "./client"
 
+// Re-export QueryClient so plugin authors and tests can configure it without
+// reaching into @tanstack/react-query directly.
+export { QueryClient }
+
 // ---------------------------------------------------------------------------
 // Context
 // ---------------------------------------------------------------------------
