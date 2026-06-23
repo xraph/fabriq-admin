@@ -13,7 +13,9 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
-    "@fabriq/admin-sdk": "workspace:*"
+    "@fabriq/admin-sdk": "workspace:*",
+    "@fabriq/ui": "workspace:*",
+    "lucide-react": "^0.456.0"
   },
   "devDependencies": {
     "react": "^19.0.0",
