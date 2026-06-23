@@ -71,6 +71,31 @@ describe("matchRoute", () => {
     expect(result).not.toBeNull()
     expect(result!.params).toEqual({})
   })
+
+  it("extracts two :param segments (entities/:type/:id)", () => {
+    const routes: PluginRoute[] = [{ path: "entities/:type/:id", element: DetailEl }]
+    const result = matchRoute(routes, "entities/orders/abc-123")
+    expect(result).not.toBeNull()
+    expect(result!.params).toEqual({ type: "orders", id: "abc-123" })
+    expect(result!.route.element).toBe(DetailEl)
+  })
+
+  it("does NOT match two-param route against one-param path", () => {
+    const routes: PluginRoute[] = [{ path: "entities/:type/:id", element: DetailEl }]
+    expect(matchRoute(routes, "entities/orders")).toBeNull()
+    expect(matchRoute(routes, "entities")).toBeNull()
+  })
+
+  it("mixes static + two params: static segment must match exactly", () => {
+    const routes: PluginRoute[] = [
+      { path: "admin/:type/:id", element: DetailEl },
+      { path: "entities/:type/:id", element: AnotherEl },
+    ]
+    const result = matchRoute(routes, "entities/orders/xyz")
+    expect(result).not.toBeNull()
+    expect(result!.route.element).toBe(AnotherEl)
+    expect(result!.params).toEqual({ type: "orders", id: "xyz" })
+  })
 })
 
 // ---------------------------------------------------------------------------

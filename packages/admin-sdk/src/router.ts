@@ -12,7 +12,8 @@ export interface RouteMatch {
 
 /**
  * Matches `path` against the given `routes` array.
- * Supports static segments and ONE-level `:param` segments.
+ * Supports static segments and MULTIPLE `:param` segments per route.
+ * A route like `entities/:type/:id` matches `entities/orders/abc` → `{type:"orders",id:"abc"}`.
  * Exact segment-count match required. First match wins.
  */
 export function matchRoute(

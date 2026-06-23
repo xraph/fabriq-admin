@@ -10,7 +10,7 @@ export const entityBrowserPlugin = definePlugin({
   navItems: [{ label: "Entities", to: "entities", order: 10 }],
   routes: [
     { path: "entities", element: EntityList, title: "Entities" },
-    { path: "entities/:id", element: EntityDetail, title: "Entity" },
+    { path: "entities/:type/:id", element: EntityDetail, title: "Entity" },
   ],
 })
 

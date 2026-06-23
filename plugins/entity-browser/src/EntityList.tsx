@@ -7,45 +7,59 @@ export function EntityList() {
 
   const { data, isLoading, isError } = useFabriqQuery(
     ["entities", type],
-    (client) => client.listEntities(type ? { type } : undefined),
+    (client) => client.listEntities({ type }),
+    // Only fire the query when a non-empty type has been entered.
+    { enabled: type.trim().length > 0 },
   )
-
-  if (isLoading) {
-    return <p>Loading…</p>
-  }
-
-  if (isError) {
-    return <p>Error loading entities.</p>
-  }
 
   return (
     <div>
+      <label htmlFor="entity-type-input">Entity type</label>
       <input
-        aria-label="Filter by type"
-        placeholder="Filter by type"
+        id="entity-type-input"
+        aria-label="Entity type"
+        placeholder="Enter an entity type to browse"
         value={type}
         onChange={(e) => setType(e.target.value)}
       />
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Type</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(data?.items ?? []).map((entity) => (
-            <tr
-              key={entity.id}
-              style={{ cursor: "pointer" }}
-              onClick={() => navigate("entities/" + encodeURIComponent(entity.id))}
-            >
-              <td>{entity.id}</td>
-              <td>{entity.type}</td>
+
+      {type.trim().length === 0 && (
+        <p>Enter an entity type to browse</p>
+      )}
+
+      {type.trim().length > 0 && isLoading && <p>Loading…</p>}
+
+      {type.trim().length > 0 && isError && <p>Error loading entities.</p>}
+
+      {type.trim().length > 0 && !isLoading && !isError && (
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Type</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {(data?.items ?? []).map((entity) => (
+              <tr
+                key={entity.id}
+                style={{ cursor: "pointer" }}
+                onClick={() =>
+                  navigate(
+                    "entities/" +
+                      encodeURIComponent(entity.type) +
+                      "/" +
+                      encodeURIComponent(entity.id),
+                  )
+                }
+              >
+                <td>{entity.id}</td>
+                <td>{entity.type}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }

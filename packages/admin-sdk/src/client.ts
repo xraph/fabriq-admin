@@ -90,11 +90,15 @@ export class FabriqClient {
     })
   }
 
-  /** GET /entities/:id */
-  getEntity(id: string): Promise<EntityRecord> {
+  /** GET /entities/:id?type=<T> — `type` is required by the backend */
+  getEntity(id: string, params?: { type?: string }): Promise<EntityRecord> {
+    const query = params?.type !== undefined
+      ? { type: params.type } as Record<string, string | number | undefined>
+      : undefined
     return this.transport.request<EntityRecord>({
       method: "GET",
       path: `${this.baseUrl}/entities/${encodeURIComponent(id)}`,
+      ...(query ? { query } : {}),
     })
   }
 

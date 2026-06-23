@@ -82,7 +82,7 @@ describe("FabriqClient", () => {
     expect(transport.lastRequest?.query).toBeUndefined()
   })
 
-  it("getEntity — interpolates :id into path", async () => {
+  it("getEntity — interpolates :id into path (no type)", async () => {
     const transport = new FakeTransport()
     const entity = { id: "abc", type: "node", data: { label: "hello" } }
     transport.setRequestResponse(entity)
@@ -93,6 +93,20 @@ describe("FabriqClient", () => {
     expect(result).toEqual(entity)
     expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
     expect(transport.lastRequest?.path).toBe("http://localhost:9000/entities/abc")
+    expect(transport.lastRequest?.query).toBeUndefined()
+  })
+
+  it("getEntity — sends type query param when provided", async () => {
+    const transport = new FakeTransport()
+    const entity = { id: "abc", type: "orders", data: { amount: 100 } }
+    transport.setRequestResponse(entity)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.getEntity("abc", { type: "orders" })
+
+    expect(result).toEqual(entity)
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/entities/abc")
+    expect(transport.lastRequest?.query).toEqual({ type: "orders" })
   })
 
   it("watch — calls stream with /watch path and yields events", async () => {
