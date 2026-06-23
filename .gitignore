@@ -2,3 +2,7 @@ node_modules
 dist
 *.tsbuildinfo
 .DS_Store
+
+# scratch task/fix reports
+.task-*-report.md
+.fix-report.md
