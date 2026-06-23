@@ -4,3 +4,11 @@
 @source "../../../packages/ui/src";
 @source "../../../packages/admin-sdk/src";
 @source "../../../plugins/entity-browser/src";
+
+/* Host-app layout only (the admin library itself owns no global styles). */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
