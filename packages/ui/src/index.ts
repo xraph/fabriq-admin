@@ -1,5 +1,6 @@
 // Utility
 export { cn } from "./lib/utils"
+export { PortalContainerProvider, usePortalContainer } from "./lib/portal-container"
 
 // Components
 export { Button, buttonVariants } from "./components/ui/button"
@@ -84,3 +85,8 @@ export {
   SheetTitle,
   SheetDescription,
 } from "./components/ui/sheet"
+export {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "./components/ui/popover"

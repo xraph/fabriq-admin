@@ -2,6 +2,7 @@ import React, {
   createContext,
   useContext,
   useMemo,
+  useState,
   type ComponentType,
 } from "react"
 import { TenantContext } from "./tenant"
@@ -19,6 +20,7 @@ import { PluginErrorBoundary } from "./PluginErrorBoundary"
 import {
   cn,
   Button,
+  PortalContainerProvider,
   Sidebar,
   SidebarProvider,
   SidebarTrigger,
@@ -142,6 +144,8 @@ export function FabriqAdmin({
   loadRemote,
   tenantStore,
 }: FabriqAdminProps) {
+  const [rootEl, setRootEl] = useState<HTMLElement | null>(null)
+
   const { registry, plugins: pluginEntries, addRemote, removeRemote, reloadRemote } =
     usePluginManager({ plugins, store, loadRemote })
 
@@ -179,9 +183,12 @@ export function FabriqAdmin({
     <FabriqProvider client={client} queryClient={queryClient}>
       <PluginHostContext.Provider value={hostValue}>
         <div
+          ref={setRootEl}
           className={cn("fabriq-admin flex h-full w-full overflow-hidden")}
           data-fabriq-theme={resolved}
         >
+          <PortalContainerProvider container={rootEl}>
+          <PluginErrorBoundary>
           {hasPlugins ? (
             <SidebarProvider>
               <Sidebar>
@@ -272,6 +279,8 @@ export function FabriqAdmin({
           ) : (
             <EmptyState />
           )}
+          </PluginErrorBoundary>
+          </PortalContainerProvider>
         </div>
       </PluginHostContext.Provider>
     </FabriqProvider>

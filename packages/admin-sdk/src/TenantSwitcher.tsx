@@ -2,12 +2,9 @@ import React, { useRef, useState, type KeyboardEvent } from "react"
 import {
   Button,
   Input,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
 } from "@fabriq/ui"
 import { Building2, Check, Plus, ChevronDown, X } from "lucide-react"
 import type { TenantStore } from "./tenant"
@@ -22,23 +19,41 @@ export interface TenantSwitcherProps {
 }
 
 /**
- * A sidebar-width dropdown that lets the user pick or add a tenant.
+ * A sidebar-width popover that lets the user pick or add a tenant.
  * Sits in the SidebarHeader beneath the brand row.
  *
- * - Shows recent tenants as selectable items (active one has a check mark).
+ * Uses a Popover (not a Menu) so that focusable children like <Input> and
+ * <Button> are allowed inside the popup. Base UI's Menu is a composite
+ * roving-focus container that throws ("Base UI error #31") when arbitrary
+ * focusable elements are nested inside it.
+ *
+ * - Shows recent tenants as selectable buttons (active one has a check mark).
  * - An inline "Add" row lets the user type a tenant id and press Enter or click +.
- * - A "Clear tenant" item appears when one is active.
+ * - A "Clear tenant" button appears when one is active.
  */
 export function TenantSwitcher({ store }: TenantSwitcherProps) {
   const { tenant, setTenant, recents } = useTenant(store)
+  const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
+
+  function selectTenant(id: string) {
+    setTenant(id)
+    setOpen(false)
+    setDraft("")
+  }
+
+  function clearTenant() {
+    setTenant(null)
+    setOpen(false)
+  }
 
   function commitDraft() {
     const val = draft.trim()
     if (val) {
       setTenant(val)
       setDraft("")
+      setOpen(false)
     }
   }
 
@@ -50,10 +65,10 @@ export function TenantSwitcher({ store }: TenantSwitcherProps) {
   }
 
   return (
-    <DropdownMenu>
-      {/* DropdownMenuTrigger from @base-ui/react already renders a <button>;
+    <Popover open={open} onOpenChange={setOpen}>
+      {/* PopoverTrigger from @base-ui/react already renders a <button>;
           do not wrap with <Button> to avoid nested <button> elements. */}
-      <DropdownMenuTrigger
+      <PopoverTrigger
         className="inline-flex w-full items-center justify-between gap-2 rounded-md px-2 h-8 text-xs font-normal text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         aria-label={tenant ? `Active tenant: ${tenant}` : "No tenant selected"}
       >
@@ -62,45 +77,49 @@ export function TenantSwitcher({ store }: TenantSwitcherProps) {
           <span className="truncate">{tenant ?? "No tenant"}</span>
         </span>
         <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </DropdownMenuTrigger>
+      </PopoverTrigger>
 
-      <DropdownMenuContent
+      <PopoverContent
         align="start"
         sideOffset={4}
-        className="w-56"
+        className="w-56 p-1"
       >
-        <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1">
+        {/* Label */}
+        <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
           Tenants
-        </DropdownMenuLabel>
+        </p>
 
-        {recents.length === 0 && (
-          <DropdownMenuItem disabled className="text-xs text-muted-foreground italic">
+        {/* Recent tenants list */}
+        {recents.length === 0 ? (
+          <p className="px-2 py-1 text-xs text-muted-foreground italic">
             No recent tenants
-          </DropdownMenuItem>
+          </p>
+        ) : (
+          <div role="listbox" aria-label="Recent tenants">
+            {recents.map((r) => (
+              <button
+                key={r}
+                role="option"
+                aria-selected={tenant === r}
+                className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-xs text-left hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground outline-none"
+                onClick={() => selectTenant(r)}
+              >
+                <Check
+                  className="h-3.5 w-3.5 shrink-0"
+                  style={{ opacity: tenant === r ? 1 : 0 }}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{r}</span>
+              </button>
+            ))}
+          </div>
         )}
 
-        {recents.map((r) => (
-          <DropdownMenuItem
-            key={r}
-            className="flex items-center gap-2 text-xs"
-            onSelect={() => setTenant(r)}
-          >
-            <Check
-              className="h-3.5 w-3.5 shrink-0"
-              style={{ opacity: tenant === r ? 1 : 0 }}
-              aria-hidden="true"
-            />
-            <span className="truncate">{r}</span>
-          </DropdownMenuItem>
-        ))}
+        {/* Separator */}
+        <div className="-mx-1 my-1 h-px bg-border" role="separator" />
 
-        <DropdownMenuSeparator />
-
-        {/* Inline "Add tenant" row — stays open while user types */}
-        <div
-          className="flex items-center gap-1 px-2 py-1"
-          onKeyDown={(e) => e.stopPropagation()}  // prevent menu keyboard nav
-        >
+        {/* Inline "Add tenant" row — Popover allows arbitrary focusable children */}
+        <div className="flex items-center gap-1 px-1.5 py-1">
           <Input
             ref={inputRef}
             value={draft}
@@ -122,19 +141,20 @@ export function TenantSwitcher({ store }: TenantSwitcherProps) {
           </Button>
         </div>
 
+        {/* Clear tenant (shown only when a tenant is active) */}
         {tenant && (
           <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="flex items-center gap-2 text-xs text-destructive focus:text-destructive"
-              onSelect={() => setTenant(null)}
+            <div className="-mx-1 my-1 h-px bg-border" role="separator" />
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-xs text-destructive text-left hover:bg-destructive/10 focus:bg-destructive/10 outline-none"
+              onClick={clearTenant}
             >
               <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span>Clear tenant</span>
-            </DropdownMenuItem>
+            </button>
           </>
         )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   )
 }
