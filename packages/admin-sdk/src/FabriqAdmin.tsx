@@ -13,7 +13,20 @@ import { matchRoute, useInternalRouter, type RouterState } from "./router"
 import { useResolvedTheme, type ThemeProp, type ResolvedTheme } from "./theme"
 import { resolveIcon } from "./icons"
 import { PluginErrorBoundary } from "./PluginErrorBoundary"
-import { cn, Button, ScrollArea } from "@fabriq/ui"
+import {
+  cn,
+  Button,
+  Sidebar,
+  SidebarProvider,
+  SidebarTrigger,
+  SidebarInset,
+  SidebarContent,
+  SidebarHeader,
+  SidebarGroup,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+} from "@fabriq/ui"
 import {
   Database,
   Sun,
@@ -79,144 +92,6 @@ export interface FabriqAdminProps {
 }
 
 // ---------------------------------------------------------------------------
-// AdminSidebar
-// ---------------------------------------------------------------------------
-
-function AdminSidebar({
-  registry,
-  navigate,
-  path,
-}: {
-  registry: PluginRegistry
-  navigate: (to: string) => void
-  path: string
-}) {
-  const items = registry.navItems()
-
-  return (
-    <aside
-      className="flex flex-col border-r border-border bg-card"
-      style={{ width: 240, minWidth: 240, flexShrink: 0 }}
-    >
-      {/* Brand row */}
-      <div className="flex items-center gap-2 px-4 h-14 border-b border-border">
-        <Database className="h-5 w-5 text-primary" aria-hidden="true" />
-        <span className="font-semibold text-sm tracking-tight text-foreground">fabriq</span>
-      </div>
-
-      {/* Nav items */}
-      <ScrollArea className="flex-1">
-        <nav
-          aria-label="Admin navigation"
-          className="flex flex-col gap-0.5 p-3"
-        >
-          {items.map((item) => {
-            const isActive =
-              path === item.to || path.startsWith(item.to + "/")
-            const Icon = resolveIcon(item.icon)
-            return (
-              <button
-                key={item.to}
-                onClick={() => navigate(item.to)}
-                aria-current={isActive ? "page" : undefined}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
-                  isActive
-                    ? "bg-accent font-medium text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-                )}
-              >
-                <Icon
-                  className={cn(
-                    "h-4 w-4 shrink-0",
-                    isActive ? "text-primary" : "text-muted-foreground",
-                  )}
-                  aria-hidden="true"
-                />
-                {item.label}
-              </button>
-            )
-          })}
-        </nav>
-      </ScrollArea>
-    </aside>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// AdminHeader
-// ---------------------------------------------------------------------------
-
-function AdminHeader({
-  title,
-  resolved,
-  setOverride,
-}: {
-  title: string
-  resolved: ResolvedTheme
-  setOverride: (t: ResolvedTheme | null) => void
-}) {
-  const toggleTheme = () => {
-    setOverride(resolved === "dark" ? "light" : "dark")
-  }
-
-  return (
-    <header className="flex items-center justify-between px-6 h-14 border-b border-border bg-background shrink-0">
-      <span className="text-sm font-medium text-foreground">{title}</span>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={toggleTheme}
-        aria-label="Toggle theme"
-        className="h-8 w-8"
-      >
-        {resolved === "dark" ? (
-          <Sun className="h-4 w-4" aria-hidden="true" />
-        ) : (
-          <Moon className="h-4 w-4" aria-hidden="true" />
-        )}
-      </Button>
-    </header>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// AdminMain
-// ---------------------------------------------------------------------------
-
-function AdminMain({
-  registry,
-  path,
-}: {
-  registry: PluginRegistry
-  path: string
-}) {
-  const match = matchRoute(registry.routes(), path)
-
-  if (!match) {
-    return (
-      <main className="flex-1 overflow-auto p-6">
-        <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-16">
-          <LayoutDashboard className="h-10 w-10 text-muted-foreground opacity-40" aria-hidden="true" />
-          <p className="text-muted-foreground text-sm">Not found</p>
-        </div>
-      </main>
-    )
-  }
-
-  const El = match.route.element as ComponentType<{ params?: Record<string, string> }>
-  return (
-    <main className="flex-1 overflow-auto">
-      <div className="mx-auto w-full max-w-5xl px-8 py-8">
-        <PluginErrorBoundary resetKey={path}>
-          <El params={match.params} />
-        </PluginErrorBoundary>
-      </div>
-    </main>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // EmptyState
 // ---------------------------------------------------------------------------
 
@@ -278,7 +153,6 @@ export function FabriqAdmin({
 
   const { resolved, setOverride } = useResolvedTheme(theme)
 
-  // Derive section title from active nav item
   const navItems = registry.navItems()
   const activeItem = navItems.find(
     (item) => router.path === item.to || router.path.startsWith(item.to + "/"),
@@ -287,29 +161,103 @@ export function FabriqAdmin({
 
   const hasPlugins = registry.all().length > 0
 
+  const toggleTheme = () => {
+    setOverride(resolved === "dark" ? "light" : "dark")
+  }
+
   return (
     <FabriqProvider client={client} queryClient={queryClient}>
       <PluginHostContext.Provider value={hostValue}>
         <div
-          className="fabriq-admin flex h-full w-full overflow-hidden"
+          className={cn("fabriq-admin flex h-full w-full overflow-hidden")}
           data-fabriq-theme={resolved}
         >
           {hasPlugins ? (
-            <>
-              <AdminSidebar
-                registry={registry}
-                navigate={router.navigate}
-                path={router.path}
-              />
-              <div className="flex flex-col flex-1 overflow-hidden">
-                <AdminHeader
-                  title={sectionTitle}
-                  resolved={resolved}
-                  setOverride={setOverride}
-                />
-                <AdminMain registry={registry} path={router.path} />
-              </div>
-            </>
+            <SidebarProvider>
+              <Sidebar>
+                {/* Brand row */}
+                <SidebarHeader>
+                  <div className="flex items-center gap-2 px-2 py-1">
+                    <Database className="h-5 w-5 text-primary" aria-hidden="true" />
+                    <span className="font-semibold text-sm tracking-tight text-foreground">fabriq</span>
+                  </div>
+                </SidebarHeader>
+
+                {/* Nav */}
+                <SidebarContent>
+                  <SidebarGroup>
+                    <SidebarMenu>
+                      {navItems.map((item) => {
+                        const isActive =
+                          router.path === item.to || router.path.startsWith(item.to + "/")
+                        const Icon = resolveIcon(item.icon)
+                        return (
+                          <SidebarMenuItem key={item.to}>
+                            <SidebarMenuButton
+                              isActive={isActive}
+                              onClick={() => router.navigate(item.to)}
+                              tooltip={item.label}
+                              aria-current={isActive ? "page" : undefined}
+                            >
+                              <Icon aria-hidden="true" />
+                              <span>{item.label}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )
+                      })}
+                    </SidebarMenu>
+                  </SidebarGroup>
+                </SidebarContent>
+              </Sidebar>
+
+              <SidebarInset>
+                {/* Header bar */}
+                <header className="flex items-center justify-between px-4 h-14 border-b border-border bg-background shrink-0">
+                  <div className="flex items-center gap-2">
+                    <SidebarTrigger />
+                    <span className="text-sm font-medium text-foreground">{sectionTitle}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleTheme}
+                    aria-label="Toggle theme"
+                    className="h-8 w-8"
+                  >
+                    {resolved === "dark" ? (
+                      <Sun className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <Moon className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </header>
+
+                {/* Main content */}
+                {(() => {
+                  const match = matchRoute(registry.routes(), router.path)
+                  if (!match) {
+                    return (
+                      <div className="flex-1 overflow-auto p-6">
+                        <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-16">
+                          <LayoutDashboard className="h-10 w-10 text-muted-foreground opacity-40" aria-hidden="true" />
+                          <p className="text-muted-foreground text-sm">Not found</p>
+                        </div>
+                      </div>
+                    )
+                  }
+                  const El = match.route.element as ComponentType<{ params?: Record<string, string> }>
+                  return (
+                    <div className="flex-1 overflow-auto">
+                      <div className="mx-auto w-full max-w-5xl px-8 py-8">
+                        <PluginErrorBoundary resetKey={router.path}>
+                          <El params={match.params} />
+                        </PluginErrorBoundary>
+                      </div>
+                    </div>
+                  )
+                })()}
+              </SidebarInset>
+            </SidebarProvider>
           ) : (
             <EmptyState />
           )}
