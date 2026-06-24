@@ -19,6 +19,8 @@ import {
   Moon,
   LayoutDashboard,
 } from "lucide-react"
+import type { PluginStore, NewRemotePluginSpec } from "./pluginStore"
+import { usePluginManager, type PluginEntry } from "./pluginManager"
 
 // ---------------------------------------------------------------------------
 // PluginHostContext
@@ -28,6 +30,14 @@ export interface PluginHostValue {
   registry: PluginRegistry
   navigate: RouterState["navigate"]
   path: string
+  /** Unified view of all plugins (builtins + remotes, including loading/error states). */
+  plugins: PluginEntry[]
+  /** Load a remote plugin by spec (persists if store provided). */
+  addRemote(spec: NewRemotePluginSpec): Promise<void>
+  /** Remove a remote plugin by id (removes from store if provided). */
+  removeRemote(id: string): Promise<void>
+  /** Reload a remote plugin by id (re-runs the load path). */
+  reloadRemote(id: string): Promise<void>
 }
 
 const PluginHostContext = createContext<PluginHostValue | null>(null)
@@ -53,6 +63,18 @@ export interface FabriqAdminProps {
   basePath?: string
   initialPath?: string
   queryClient?: QueryClient
+  /**
+   * Optional persistence store. If provided, the shell loads persisted remote specs
+   * on mount and persists add/remove operations. If omitted, runtime management is
+   * in-memory only (no persistence across page reloads).
+   */
+  store?: PluginStore
+  /**
+   * Injectable remote loader. Defaults to a thin wrapper over `loadRemotePlugin`.
+   * Pass a fake loader in tests to avoid any Module Federation / window / document access.
+   * This is the key testability seam — tests must NEVER hit real Module Federation.
+   */
+  loadRemote?: (spec: NewRemotePluginSpec) => Promise<FabriqAdminPlugin>
 }
 
 // ---------------------------------------------------------------------------
@@ -206,6 +228,13 @@ function EmptyState() {
  * Mountable admin shell. Works standalone or embedded inside a host app.
  * Does NOT assume page ownership — no html/body, no global router, no CSS reset.
  * Routing is internal (useState), scoped to this component tree.
+ *
+ * Dynamic plugin management:
+ * - Pass `store` to persist remote plugin specs across reloads.
+ * - Pass `loadRemote` to inject a custom loader (required in tests to avoid
+ *   real Module Federation / window / document access).
+ * - Use `usePluginHost().addRemote` / `removeRemote` from within any plugin
+ *   route element to register or unregister remote plugins at runtime.
  */
 export function FabriqAdmin({
   client,
@@ -214,20 +243,25 @@ export function FabriqAdmin({
   basePath = "/admin",
   initialPath = "",
   queryClient,
+  store,
+  loadRemote,
 }: FabriqAdminProps) {
-  const registry = useMemo(() => {
-    const reg = new PluginRegistry()
-    for (const plugin of plugins) {
-      reg.register(plugin)
-    }
-    return reg
-  }, [plugins])
+  const { registry, plugins: pluginEntries, addRemote, removeRemote, reloadRemote } =
+    usePluginManager({ plugins, store, loadRemote })
 
   const router = useInternalRouter(initialPath, basePath)
 
   const hostValue = useMemo<PluginHostValue>(
-    () => ({ registry, navigate: router.navigate, path: router.path }),
-    [registry, router.navigate, router.path],
+    () => ({
+      registry,
+      navigate: router.navigate,
+      path: router.path,
+      plugins: pluginEntries,
+      addRemote,
+      removeRemote,
+      reloadRemote,
+    }),
+    [registry, router.navigate, router.path, pluginEntries, addRemote, removeRemote, reloadRemote],
   )
 
   const { resolved, setOverride } = useResolvedTheme(theme)
