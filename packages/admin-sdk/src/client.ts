@@ -7,6 +7,7 @@ export interface FabriqTransport {
     method?: string
     path: string
     query?: Record<string, string | number | undefined>
+    body?: unknown
     signal?: AbortSignal
   }): Promise<T>
 
@@ -42,6 +43,22 @@ export interface WatchScope {
   tenant?: string
   type?: string
 }
+
+/**
+ * Wire-format representation of a remote plugin as returned/accepted by the
+ * admin API. Named separately from pluginStore.RemotePluginSpec to avoid a
+ * circular module dependency; pluginStore re-exports these as its own types.
+ */
+export interface PluginRecord {
+  id: string
+  name: string
+  url: string
+  scope: string
+  module: string
+}
+
+/** PluginRecord without the server-assigned id — used for creation. */
+export type NewPluginRecord = Omit<PluginRecord, "id">
 
 // ---------------------------------------------------------------------------
 // FabriqClient
@@ -98,6 +115,31 @@ export class FabriqClient {
       method: "GET",
       path: `${this.baseUrl}/entities/${encodeURIComponent(id)}`,
       ...(query ? { query } : {}),
+    })
+  }
+
+  /** GET /plugins — list all registered remote plugins */
+  listPlugins(): Promise<{ items: PluginRecord[] }> {
+    return this.transport.request({
+      method: "GET",
+      path: `${this.baseUrl}/plugins`,
+    })
+  }
+
+  /** POST /plugins — register a new remote plugin */
+  addPlugin(spec: NewPluginRecord): Promise<PluginRecord> {
+    return this.transport.request({
+      method: "POST",
+      path: `${this.baseUrl}/plugins`,
+      body: spec,
+    })
+  }
+
+  /** DELETE /plugins/:id — remove a remote plugin by id */
+  removePlugin(id: string): Promise<void> {
+    return this.transport.request({
+      method: "DELETE",
+      path: `${this.baseUrl}/plugins/${encodeURIComponent(id)}`,
     })
   }
 

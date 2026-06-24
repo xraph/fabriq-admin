@@ -10,6 +10,18 @@ export { createHttpTransport, HttpTransportError } from "./httpTransport"
 export type { HttpTransportOptions } from "./httpTransport"
 export { loadRemotePlugin } from "./remoteLoader"
 export type { RemotePluginOptions } from "./remoteLoader"
+export {
+  localStoragePluginStore,
+  httpPluginStore,
+  compositePluginStore,
+} from "./pluginStore"
+export type {
+  RemotePluginSpec,
+  NewRemotePluginSpec,
+  PluginStore,
+  LocalStoragePluginStoreOptions,
+  CompositePluginStoreOptions,
+} from "./pluginStore"
 
 // --- experimental: live streaming (no Phase 1 backend) ---
 // FabriqTransport.stream, FabriqClient.watch(), and WatchScope are re-exported

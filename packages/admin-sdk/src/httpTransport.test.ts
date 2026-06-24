@@ -112,6 +112,27 @@ describe("createHttpTransport – request", () => {
     const transport = createHttpTransport({ baseUrl: "http://api.example.com", fetchImpl })
     await expect(transport.request({ path: "/entities/missing" })).rejects.toThrow("404")
   })
+
+  it("sends JSON body with Content-Type header when body is provided", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({ ok: true, status: 201, body: { id: "1", name: "test" } }))
+    const transport = createHttpTransport({ baseUrl: "http://api.example.com", fetchImpl })
+    const payload = { name: "test", url: "https://cdn.com/entry.js", scope: "s", module: "./p" }
+    await transport.request({ method: "POST", path: "/plugins", body: payload })
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    expect((init as RequestInit).body).toBe(JSON.stringify(payload))
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers["Content-Type"]).toBe("application/json")
+  })
+
+  it("does not send a body or Content-Type on GET requests without body", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({ ok: true, status: 200, body: {} }))
+    const transport = createHttpTransport({ baseUrl: "http://api.example.com", fetchImpl })
+    await transport.request({ method: "GET", path: "/meta" })
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    expect((init as RequestInit).body).toBeUndefined()
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers["Content-Type"]).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------

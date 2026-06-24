@@ -41,6 +41,7 @@ export function createHttpTransport({
     method?: string
     path: string
     query?: Record<string, string | number | undefined>
+    body?: unknown
     signal?: AbortSignal
   }): Promise<T> {
     let url = opts.path
@@ -61,9 +62,13 @@ export function createHttpTransport({
       if (qs) url += "?" + qs
     }
 
+    const hasBody = opts.body !== undefined
     const res = await _fetch(url, {
       method: opts.method ?? "GET",
-      headers: { ...defaultHeaders },
+      headers: hasBody
+        ? { ...defaultHeaders, "Content-Type": "application/json" }
+        : { ...defaultHeaders },
+      body: hasBody ? JSON.stringify(opts.body) : undefined,
       signal: opts.signal,
     })
 
