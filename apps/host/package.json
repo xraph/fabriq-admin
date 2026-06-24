@@ -12,6 +12,7 @@
   "dependencies": {
     "@fabriq/admin-sdk": "workspace:*",
     "@fabriq/plugin-entity-browser": "workspace:*",
+    "@fabriq/plugin-plugins-manager": "workspace:*",
     "@fabriq/ui": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

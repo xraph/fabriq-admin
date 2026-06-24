@@ -8,6 +8,7 @@ import {
   localStoragePluginStore,
 } from "@fabriq/admin-sdk"
 import { entityBrowserPlugin } from "@fabriq/plugin-entity-browser"
+import { pluginsManagerPlugin } from "@fabriq/plugin-plugins-manager"
 
 // Read the API base URL from the environment (injected by Vite at build/dev time).
 // Defaults to http://localhost:8080/admin for local development.
@@ -32,7 +33,7 @@ const store = compositePluginStore({
 })
 
 // Builtin plugins — always mounted.
-const plugins = [entityBrowserPlugin]
+const plugins = [entityBrowserPlugin, pluginsManagerPlugin]
 
 export function App() {
   return (

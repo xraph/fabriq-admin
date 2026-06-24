@@ -4,6 +4,8 @@ import {
   Search,
   Home,
   Circle,
+  Plug,
+  Settings,
   type LucideIcon,
 } from "lucide-react"
 
@@ -21,6 +23,10 @@ export function resolveIcon(name?: string): LucideIcon {
       return Search
     case "home":
       return Home
+    case "plugins":
+      return Plug
+    case "settings":
+      return Settings
     default:
       return Circle
   }
