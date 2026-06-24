@@ -13,6 +13,35 @@ interface RemoteContainer {
 }
 
 // ---------------------------------------------------------------------------
+// @originjs/vite-plugin-federation runtime helpers
+//
+// When the host is built with @originjs/vite-plugin-federation (even with
+// empty static remotes) it exposes three global runtime methods that allow
+// loading additional remotes at runtime without a host rebuild:
+//
+//   __federation_method_setRemote(name, config)   — register a remote by URL
+//   __federation_method_getRemote(name, module)   — load + return module from remote
+//   __federation_method_unwrapDefault(module)      — resolve .default export
+//
+// These are imported from "virtual:__federation__" in the host source and
+// surfaced as globals by the federation Vite plugin.  The remote shares
+// modules (react, react-dom, etc.) via the host's shared scope — one React
+// instance across the boundary.
+// ---------------------------------------------------------------------------
+
+interface FederationRemoteConfig {
+  url: string | (() => Promise<string>)
+  format?: string
+  from?: string
+}
+
+interface FederationRuntime {
+  setRemote(name: string, config: FederationRemoteConfig): void
+  getRemote(name: string, exposedModule: string): Promise<unknown>
+  unwrapDefault(mod: unknown): unknown
+}
+
+// ---------------------------------------------------------------------------
 // RemotePluginOptions
 // ---------------------------------------------------------------------------
 
@@ -42,6 +71,19 @@ export interface RemotePluginOptions {
    * context. In Node/tests, always pass `getContainer`.
    */
   getContainer?: (scope: string) => Promise<RemoteContainer>
+  /**
+   * Injectable @originjs/vite-plugin-federation runtime helpers.
+   *
+   * In production this is NOT injected — `loadRemotePlugin` reads the helpers
+   * from `window` at call-time (SSR-safe, never at module scope).
+   *
+   * In unit tests, inject a fake object here to exercise the @originjs path
+   * without touching real globals.
+   *
+   * When provided, this path takes priority over the legacy script-injection
+   * path (loadEntry + getContainer).
+   */
+  federationRuntime?: FederationRuntime
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +124,73 @@ async function defaultGetContainer(scope: string): Promise<RemoteContainer> {
   return container
 }
 
+/**
+ * Reads the @originjs runtime helpers from `window` if they exist.
+ * Returns null when not in a browser or when the host was not built with
+ * @originjs/vite-plugin-federation (e.g. in Node/test environments).
+ *
+ * SSR-safe: only accesses `window` inside function body.
+ */
+function readWindowFederationRuntime(): FederationRuntime | null {
+  if (typeof window === "undefined") return null
+  const w = window as unknown as Record<string, unknown>
+  const set = w["__federation_method_setRemote"]
+  const get = w["__federation_method_getRemote"]
+  const unwrap = w["__federation_method_unwrapDefault"]
+  if (
+    typeof set !== "function" ||
+    typeof get !== "function" ||
+    typeof unwrap !== "function"
+  ) {
+    return null
+  }
+  return {
+    setRemote: set as FederationRuntime["setRemote"],
+    getRemote: get as FederationRuntime["getRemote"],
+    unwrapDefault: unwrap as FederationRuntime["unwrapDefault"],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// loadRemotePlugin — @originjs runtime path
+// ---------------------------------------------------------------------------
+
+async function loadViaFederationRuntime(
+  rt: FederationRuntime,
+  url: string,
+  scope: string,
+  modulePath: string,
+): Promise<FabriqAdminPlugin> {
+  // Register the remote by URL with the host's shared scope.
+  rt.setRemote(scope, { url, format: "esm", from: "vite" })
+
+  // Load the exposed module — the federation runtime handles shared modules
+  // (react, react-dom, etc.) so the remote uses the host's instances.
+  const rawModule = await rt.getRemote(scope, modulePath)
+
+  // Unwrap .default if present.
+  const unwrapped = rt.unwrapDefault(rawModule)
+
+  // Resolve: try .default first (unwrapDefault may itself return it),
+  // then named export matching the module basename, then the value itself.
+  let candidate: unknown = unwrapped
+
+  if (candidate && typeof candidate === "object") {
+    const mod = candidate as Record<string, unknown>
+    if (mod["default"] !== undefined) {
+      candidate = mod["default"]
+    } else {
+      const basename = modulePath.replace(/^\.\//, "").replace(/\.[jt]sx?$/, "")
+      if (mod[basename] !== undefined) {
+        candidate = mod[basename]
+      }
+    }
+  }
+
+  assertValidPlugin(candidate)
+  return candidate
+}
+
 // ---------------------------------------------------------------------------
 // loadRemotePlugin
 // ---------------------------------------------------------------------------
@@ -89,24 +198,48 @@ async function defaultGetContainer(scope: string): Promise<RemoteContainer> {
 /**
  * Loads a plugin from a Module Federation remote at runtime.
  *
- * Flow:
- *   1. Load the remote entry script (injects a <script> tag or uses loadEntry).
- *   2. Resolve the remote container from window[scope] (or getContainer).
- *   3. Call container.init(sharedScope) if present (singleton shared module handshake).
- *   4. container.get(module) → factory → factory() → plugin module.
- *   5. Resolve plugin: .default ?? .[moduleBasename] ?? module itself.
- *   6. Validate via assertValidPlugin — throws on invalid.
+ * There are two load paths, tried in this order:
  *
- * Testing: pass `loadEntry` and `getContainer` fakes to avoid any window/document access.
+ * 1. @originjs runtime path (preferred in a browser host built with
+ *    @originjs/vite-plugin-federation):
+ *    Uses __federation_method_setRemote / getRemote / unwrapDefault so the
+ *    remote shares the host's module scope (one React instance).
+ *    Activated when:
+ *      (a) `federationRuntime` is injected (tests / explicit wiring), OR
+ *      (b) the `__federation_method_*` globals are present on `window`
+ *          (production browser, no injection needed).
+ *
+ * 2. Legacy script-injection path (fallback / backwards compat):
+ *    Injects a <script> tag, reads window[scope], calls container.init / get.
+ *    Activated when no federation runtime is available.
+ *    Testing: pass `loadEntry` and `getContainer` fakes.
+ *
+ * React-sharing correctness:
+ *   Both paths respect the `shared: { react: { singleton: true } }` config in
+ *   both the host and remote vite configs.  The @originjs path does this via
+ *   the host's shared scope; the legacy path relies on the window[scope].init()
+ *   handshake.  Always configure both host and remote with matching singletons.
  */
 export async function loadRemotePlugin(opts: RemotePluginOptions): Promise<FabriqAdminPlugin> {
   const {
     url,
     scope,
     module: modulePath,
-    // When a custom getContainer is provided, default loadEntry to a no-op:
-    // the container is already available and entry loading is not needed.
-    // When only the browser defaults are used, loadEntry defaults to script injection.
+    federationRuntime: injectedRuntime,
+  } = opts
+
+  // ---------------------------------------------------------------------------
+  // Path 1: @originjs runtime (injected OR read from window)
+  // ---------------------------------------------------------------------------
+  const rt = injectedRuntime ?? readWindowFederationRuntime()
+  if (rt) {
+    return loadViaFederationRuntime(rt, url, scope, modulePath)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Path 2: Legacy script-injection path
+  // ---------------------------------------------------------------------------
+  const {
     loadEntry = opts.getContainer ? async (_u: string) => {} : defaultLoadEntry,
     getContainer = defaultGetContainer,
   } = opts

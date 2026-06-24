@@ -79,6 +79,40 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(jsdom@25.0.1)(lightningcss@1.32.0)
 
+  apps/remote-example:
+    dependencies:
+      '@fabriq/admin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/admin-sdk
+      '@fabriq/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@tanstack/react-query':
+        specifier: ^5.59.0
+        version: 5.101.1(react@19.2.7)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@originjs/vite-plugin-federation':
+        specifier: ^1.3.6
+        version: 1.4.1
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.17)
+      '@vitejs/plugin-react':
+        specifier: ^4.3.0
+        version: 4.7.0(vite@5.4.21(lightningcss@1.32.0))
+      vite:
+        specifier: ^5.4.0
+        version: 5.4.21(lightningcss@1.32.0)
+
   packages/admin-sdk:
     dependencies:
       '@fabriq/ui':
@@ -152,6 +186,12 @@ importers:
       '@fabriq/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
+      '@fabriq/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      lucide-react:
+        specifier: ^0.456.0
+        version: 0.456.0(react@19.2.7)
     devDependencies:
       '@types/react':
         specifier: ^19.0.0

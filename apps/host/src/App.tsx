@@ -1,4 +1,12 @@
-import { FabriqAdmin, FabriqClient, createHttpTransport } from "@fabriq/admin-sdk"
+import {
+  FabriqAdmin,
+  FabriqClient,
+  createHttpTransport,
+  loadRemotePlugin,
+  compositePluginStore,
+  httpPluginStore,
+  localStoragePluginStore,
+} from "@fabriq/admin-sdk"
 import { entityBrowserPlugin } from "@fabriq/plugin-entity-browser"
 
 // Read the API base URL from the environment (injected by Vite at build/dev time).
@@ -12,22 +20,18 @@ const client = new FabriqClient({
   transport: createHttpTransport({ baseUrl }),
 })
 
+// Plugin persistence: try the backend HTTP store first; fall back to localStorage.
+// This means registered remote plugins survive page reloads even when the
+// backend is not running.
+const store = compositePluginStore({
+  primary: httpPluginStore(client),
+  fallback: localStoragePluginStore(),
+  onFallback: (err) => {
+    console.warn("[fabriq-admin] plugin store fallback to localStorage:", err)
+  },
+})
+
 // Builtin plugins — always mounted.
-// --- SEAM: runtime-loaded remote plugins ---
-// In a future phase, append remote plugins here before rendering:
-//
-//   import { loadRemotePlugin } from "@fabriq/admin-sdk"
-//
-//   const remotePlugin = await loadRemotePlugin({
-//     url: "https://cdn.example.com/remoteEntry.js",
-//     scope: "myPlugin",
-//     module: "./plugin",
-//   })
-//   plugins.push(remotePlugin)
-//
-// Remote plugins are loaded asynchronously; wrap the render in a Suspense
-// boundary or an async initializer (e.g. a useEffect that calls setState).
-// ------------------------------------------
 const plugins = [entityBrowserPlugin]
 
 export function App() {
@@ -36,6 +40,19 @@ export function App() {
       client={client}
       plugins={plugins}
       theme="system"
+      store={store}
+      loadRemote={(spec) =>
+        loadRemotePlugin({
+          url: spec.url,
+          scope: spec.scope,
+          module: spec.module,
+          // federationRuntime is NOT injected here — loadRemotePlugin reads
+          // __federation_method_* from window at call-time (SSR-safe, no module-scope access).
+          // When the host is built with @originjs/vite-plugin-federation those
+          // globals are present and the @originjs path is used automatically,
+          // sharing the host's React/react-dom/@tanstack/react-query instances.
+        })
+      }
     />
   )
 }
