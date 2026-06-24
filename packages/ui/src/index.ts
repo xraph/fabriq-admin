@@ -4,7 +4,15 @@ export { cn } from "./lib/utils"
 // Components
 export { Button, buttonVariants } from "./components/ui/button"
 export type { ButtonProps } from "./components/ui/button"
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from "./components/ui/card"
+export {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardAction,
+} from "./components/ui/card"
 export { Input } from "./components/ui/input"
 export {
   Table,
@@ -39,4 +47,4 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuRadioGroup,
 } from "./components/ui/dropdown-menu"
-export { Alert, AlertTitle, AlertDescription } from "./components/ui/alert"
+export { Alert, AlertTitle, AlertDescription, AlertAction } from "./components/ui/alert"

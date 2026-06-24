@@ -1,4 +1,4 @@
-/* @fabriq/ui — CSS-isolated Tailwind v4 stylesheet
+/* @fabriq/ui — CSS-isolated Tailwind v4 stylesheet (base-nova + OKLCH + Lime primary)
  * Isolation contract: NO selector targets html/body/:root/bare *.
  * All tokens and base styles are scoped to .fabriq-admin.
  */
@@ -12,77 +12,115 @@
 /* 2. Dark variant keyed on the scoped root only */
 @custom-variant dark (&:where(.fabriq-admin[data-fabriq-theme="dark"], .fabriq-admin[data-fabriq-theme="dark"] *));
 
-/* 3. Light tokens — scoped to .fabriq-admin */
+/* 3. Light tokens — scoped to .fabriq-admin
+ * Source: neutral.json cssVarsV4 light + LIME overrides for primary/accent/ring
+ * Lime OKLCH values derived from Tailwind lime palette:
+ *   lime-500 ≈ oklch(0.768 0.233 130.85)  — primary action (light bg)
+ *   lime-400 ≈ oklch(0.841 0.238 128.85)  — lighter lime
+ *   lime-700 ≈ oklch(0.532 0.157 131.68)  — deep lime (foreground on lime bg)
+ *   lime-900 ≈ oklch(0.374 0.102 130.54)  — darkest lime
+ */
 .fabriq-admin {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(240 10% 3.9%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(240 10% 3.9%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(240 10% 3.9%);
-  --primary: hsl(240 5.9% 10%);
-  --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(240 4.8% 95.9%);
-  --secondary-foreground: hsl(240 5.9% 10%);
-  --muted: hsl(240 4.8% 95.9%);
-  --muted-foreground: hsl(240 3.8% 46.1%);
-  --accent: hsl(240 4.8% 95.9%);
-  --accent-foreground: hsl(240 5.9% 10%);
-  --destructive: hsl(0 84.2% 60.2%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(240 5.9% 90%);
-  --input: hsl(240 5.9% 90%);
-  --ring: hsl(240 5.9% 10%);
-  --radius: 0.5rem;
+  /* Neutral base (from neutral.json) */
+  --background:          oklch(1 0 0);
+  --foreground:          oklch(0.145 0 0);
+  --card:                oklch(1 0 0);
+  --card-foreground:     oklch(0.145 0 0);
+  --popover:             oklch(1 0 0);
+  --popover-foreground:  oklch(0.145 0 0);
+
+  /* PRIMARY = Lime */
+  --primary:             oklch(0.768 0.233 130.85);
+  --primary-foreground:  oklch(0.2 0.04 130.54);
+
+  /* SECONDARY = neutral light */
+  --secondary:           oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+
+  /* MUTED */
+  --muted:               oklch(0.97 0 0);
+  --muted-foreground:    oklch(0.556 0 0);
+
+  /* ACCENT = Lime (tinted) */
+  --accent:              oklch(0.94 0.08 130.85);
+  --accent-foreground:   oklch(0.2 0.04 130.54);
+
+  /* DESTRUCTIVE */
+  --destructive:         oklch(0.577 0.245 27.325);
+
+  /* BORDER / INPUT */
+  --border:              oklch(0.922 0 0);
+  --input:               oklch(0.922 0 0);
+
+  /* RING = Lime */
+  --ring:                oklch(0.768 0.233 130.85);
+
+  /* RADIUS */
+  --radius:              0.625rem;
 }
 
-/* 4. Dark tokens — scoped to .fabriq-admin[data-fabriq-theme="dark"] */
+/* 4. Dark tokens — scoped to .fabriq-admin[data-fabriq-theme="dark"]
+ * Source: neutral.json cssVarsV4 dark + LIME overrides
+ * lime-400 ≈ oklch(0.841 0.238 128.85) — readable on dark bg
+ */
 .fabriq-admin[data-fabriq-theme="dark"] {
-  --background: hsl(240 10% 3.9%);
-  --foreground: hsl(0 0% 98%);
-  --card: hsl(240 10% 3.9%);
-  --card-foreground: hsl(0 0% 98%);
-  --popover: hsl(240 10% 3.9%);
-  --popover-foreground: hsl(0 0% 98%);
-  --primary: hsl(0 0% 98%);
-  --primary-foreground: hsl(240 5.9% 10%);
-  --secondary: hsl(240 3.7% 15.9%);
-  --secondary-foreground: hsl(0 0% 98%);
-  --muted: hsl(240 3.7% 15.9%);
-  --muted-foreground: hsl(240 5% 64.9%);
-  --accent: hsl(240 3.7% 15.9%);
-  --accent-foreground: hsl(0 0% 98%);
-  --destructive: hsl(0 62.8% 30.6%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(240 3.7% 15.9%);
-  --input: hsl(240 3.7% 15.9%);
-  --ring: hsl(240 4.9% 83.9%);
+  --background:          oklch(0.145 0 0);
+  --foreground:          oklch(0.985 0 0);
+  --card:                oklch(0.205 0 0);
+  --card-foreground:     oklch(0.985 0 0);
+  --popover:             oklch(0.205 0 0);
+  --popover-foreground:  oklch(0.985 0 0);
+
+  /* PRIMARY = brighter lime for dark mode */
+  --primary:             oklch(0.841 0.238 128.85);
+  --primary-foreground:  oklch(0.15 0.03 130.54);
+
+  /* SECONDARY */
+  --secondary:           oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+
+  /* MUTED */
+  --muted:               oklch(0.269 0 0);
+  --muted-foreground:    oklch(0.708 0 0);
+
+  /* ACCENT = Lime dark */
+  --accent:              oklch(0.28 0.06 130.85);
+  --accent-foreground:   oklch(0.88 0.15 130.85);
+
+  /* DESTRUCTIVE */
+  --destructive:         oklch(0.704 0.191 22.216);
+
+  /* BORDER / INPUT */
+  --border:              oklch(1 0 0 / 10%);
+  --input:               oklch(1 0 0 / 15%);
+
+  /* RING = Lime */
+  --ring:                oklch(0.841 0.238 128.85);
 }
 
-/* 5. Map CSS custom properties to Tailwind v4 design tokens */
+/* 5. Map CSS custom properties to Tailwind v4 design tokens via @theme inline */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
+  --color-background:        var(--background);
+  --color-foreground:        var(--foreground);
+  --color-card:              var(--card);
+  --color-card-foreground:   var(--card-foreground);
+  --color-popover:           var(--popover);
   --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
+  --color-primary:           var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
+  --color-secondary:         var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
+  --color-muted:             var(--muted);
+  --color-muted-foreground:  var(--muted-foreground);
+  --color-accent:            var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --color-destructive:       var(--destructive);
+  --color-border:            var(--border);
+  --color-input:             var(--input);
+  --color-ring:              var(--ring);
+  --radius-lg:               var(--radius);
+  --radius-md:               calc(var(--radius) - 2px);
+  --radius-sm:               calc(var(--radius) - 4px);
 }
 
 /* 6. Minimal scoped base reset — ONLY inside .fabriq-admin; no bare * / html / body */
