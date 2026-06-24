@@ -228,47 +228,53 @@ function AddRemoteForm() {
               )}
             </div>
 
-            <div className="grid gap-1.5">
-              <label htmlFor="pm-scope" className="text-sm font-medium">
-                Scope
-              </label>
-              <Input
-                id="pm-scope"
-                aria-label="Scope"
-                placeholder="myPlugin"
-                value={values.scope}
-                onChange={handleChange("scope")}
-                aria-invalid={!!errors.scope}
-                aria-describedby={errors.scope ? "pm-scope-error" : undefined}
-              />
-              {errors.scope && (
-                <p id="pm-scope-error" className="text-xs text-destructive">
-                  {errors.scope}
-                </p>
-              )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <label htmlFor="pm-scope" className="text-sm font-medium">
+                  Scope
+                </label>
+                <Input
+                  id="pm-scope"
+                  aria-label="Scope"
+                  placeholder="myPlugin"
+                  value={values.scope}
+                  onChange={handleChange("scope")}
+                  aria-invalid={!!errors.scope}
+                  aria-describedby={errors.scope ? "pm-scope-error" : undefined}
+                />
+                {errors.scope && (
+                  <p id="pm-scope-error" className="text-xs text-destructive">
+                    {errors.scope}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-1.5">
+                <label htmlFor="pm-module" className="text-sm font-medium">
+                  Module
+                </label>
+                <Input
+                  id="pm-module"
+                  aria-label="Module"
+                  placeholder="./plugin"
+                  value={values.module}
+                  onChange={handleChange("module")}
+                  aria-invalid={!!errors.module}
+                  aria-describedby={errors.module ? "pm-module-error" : undefined}
+                />
+                {errors.module && (
+                  <p id="pm-module-error" className="text-xs text-destructive">
+                    {errors.module}
+                  </p>
+                )}
+              </div>
             </div>
 
-            <div className="grid gap-1.5">
-              <label htmlFor="pm-module" className="text-sm font-medium">
-                Module
-              </label>
-              <Input
-                id="pm-module"
-                aria-label="Module"
-                placeholder="./plugin"
-                value={values.module}
-                onChange={handleChange("module")}
-                aria-invalid={!!errors.module}
-                aria-describedby={errors.module ? "pm-module-error" : undefined}
-              />
-              {errors.module && (
-                <p id="pm-module-error" className="text-xs text-destructive">
-                  {errors.module}
-                </p>
-              )}
-            </div>
-
-            <Button type="submit" disabled={isAdding} className="w-full sm:w-auto">
+            <Button
+              type="submit"
+              disabled={isAdding}
+              className="mt-1 justify-self-start"
+            >
               {isAdding ? "Adding…" : "Add plugin"}
             </Button>
           </div>

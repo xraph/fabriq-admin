@@ -123,32 +123,136 @@
   --radius-sm:               calc(var(--radius) - 4px);
 }
 
-/* 6. Minimal scoped base reset — ONLY inside .fabriq-admin; no bare * / html / body */
+/* 6. Scoped mini-preflight — replaces Tailwind's global preflight, confined to
+ * .fabriq-admin so it resets the admin's own elements WITHOUT touching the host.
+ * NO bare * / html / body / :root selectors. Mirrors the parts of Tailwind
+ * Preflight that matter for component styling (esp. neutralising native form
+ * controls — without this, raw <button>/<input> keep UA borders + grey faces).
+ */
 @layer base {
   .fabriq-admin,
   .fabriq-admin *,
   .fabriq-admin *::before,
-  .fabriq-admin *::after {
+  .fabriq-admin *::after,
+  .fabriq-admin ::backdrop {
     box-sizing: border-box;
+    /* width 0 + solid so `border-*` utilities re-add width; kills native borders
+       (this is what removes the grey boxed look on raw <button>s). */
+    border: 0 solid;
+    margin: 0;
+    padding: 0;
   }
+
   .fabriq-admin {
-    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     color: var(--foreground);
-    background: var(--background);
+    background-color: var(--background);
     line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    tab-size: 4;
   }
-  .fabriq-admin button {
-    font: inherit;
-    color: inherit;
-  }
+
+  /* Headings inherit by default; utilities/components set size + weight. */
   .fabriq-admin h1,
   .fabriq-admin h2,
   .fabriq-admin h3,
-  .fabriq-admin p,
-  .fabriq-admin figure {
-    margin: 0;
+  .fabriq-admin h4,
+  .fabriq-admin h5,
+  .fabriq-admin h6 {
+    font-size: inherit;
+    font-weight: inherit;
   }
+
+  .fabriq-admin a {
+    color: inherit;
+    text-decoration: inherit;
+  }
+  .fabriq-admin b,
+  .fabriq-admin strong {
+    font-weight: bolder;
+  }
+  .fabriq-admin code,
+  .fabriq-admin kbd,
+  .fabriq-admin pre,
+  .fabriq-admin samp {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 1em;
+  }
+
+  .fabriq-admin ul,
+  .fabriq-admin ol,
+  .fabriq-admin menu {
+    list-style: none;
+  }
+
+  /* Media defaults so icons/images sit on the text baseline cleanly. */
+  .fabriq-admin img,
+  .fabriq-admin svg,
+  .fabriq-admin video,
+  .fabriq-admin canvas,
+  .fabriq-admin audio,
+  .fabriq-admin iframe,
+  .fabriq-admin embed,
+  .fabriq-admin object {
+    display: block;
+    vertical-align: middle;
+  }
+  .fabriq-admin img,
+  .fabriq-admin video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Form controls — inherit typography, drop native chrome. */
+  .fabriq-admin button,
+  .fabriq-admin input,
+  .fabriq-admin optgroup,
+  .fabriq-admin select,
+  .fabriq-admin textarea {
+    font: inherit;
+    font-feature-settings: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    background-color: transparent;
+  }
+  .fabriq-admin button,
+  .fabriq-admin [type="button"],
+  .fabriq-admin [type="reset"],
+  .fabriq-admin [type="submit"],
+  .fabriq-admin ::file-selector-button {
+    appearance: button;
+    -webkit-appearance: button;
+    background-color: transparent;
+    background-image: none;
+    cursor: pointer;
+  }
+  .fabriq-admin :disabled {
+    cursor: default;
+  }
+  .fabriq-admin input::placeholder,
+  .fabriq-admin textarea::placeholder {
+    color: var(--muted-foreground);
+    opacity: 1;
+  }
+  .fabriq-admin textarea {
+    resize: vertical;
+  }
+  .fabriq-admin :focus-visible {
+    outline: none;
+  }
+
   .fabriq-admin table {
     border-collapse: collapse;
+    text-indent: 0;
+  }
+  .fabriq-admin hr {
+    height: 0;
+    color: inherit;
+    border-top-width: 1px;
+  }
+  .fabriq-admin [hidden] {
+    display: none !important;
   }
 }

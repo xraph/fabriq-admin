@@ -105,8 +105,11 @@ function AdminSidebar({
       </div>
 
       {/* Nav items */}
-      <ScrollArea className="flex-1 py-2">
-        <nav aria-label="Admin navigation">
+      <ScrollArea className="flex-1">
+        <nav
+          aria-label="Admin navigation"
+          className="flex flex-col gap-0.5 p-3"
+        >
           {items.map((item) => {
             const isActive =
               path === item.to || path.startsWith(item.to + "/")
@@ -117,15 +120,19 @@ function AdminSidebar({
                 onClick={() => navigate(item.to)}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-3 w-full px-4 py-2 text-sm rounded-md mx-2 transition-colors",
-                  "hover:bg-accent hover:text-accent-foreground",
+                  "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
                   isActive
-                    ? "bg-accent text-accent-foreground font-medium"
-                    : "text-muted-foreground",
+                    ? "bg-accent font-medium text-accent-foreground"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                 )}
-                style={{ width: "calc(100% - 16px)" }}
               >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <Icon
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    isActive ? "text-primary" : "text-muted-foreground",
+                  )}
+                  aria-hidden="true"
+                />
                 {item.label}
               </button>
             )
@@ -199,10 +206,12 @@ function AdminMain({
 
   const El = match.route.element as ComponentType<{ params?: Record<string, string> }>
   return (
-    <main className="flex-1 overflow-auto p-6">
-      <PluginErrorBoundary resetKey={path}>
-        <El params={match.params} />
-      </PluginErrorBoundary>
+    <main className="flex-1 overflow-auto">
+      <div className="mx-auto w-full max-w-5xl px-8 py-8">
+        <PluginErrorBoundary resetKey={path}>
+          <El params={match.params} />
+        </PluginErrorBoundary>
+      </div>
     </main>
   )
 }

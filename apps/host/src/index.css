@@ -1,9 +1,15 @@
 @import "@fabriq/ui/styles.css";
 
-/* v4 skips symlinked node_modules — point at workspace sources so their utility classes compile */
+/* v4 skips symlinked node_modules — point at each workspace source dir so their
+ * utility classes compile. The plugins-manager and remote-example dirs were
+ * missing before, so their unique classes (sm grid-cols, justify-self-start)
+ * were silently dropped. Explicit dirs are required — wildcard globs did not
+ * expand here. */
 @source "../../../packages/ui/src";
 @source "../../../packages/admin-sdk/src";
 @source "../../../plugins/entity-browser/src";
+@source "../../../plugins/plugins-manager/src";
+@source "../../../apps/remote-example/src";
 
 /* Host-app layout only (the admin library itself owns no global styles). */
 html,
