@@ -26,6 +26,8 @@ export interface AdminMeta {
   name: string
   version: string
   capabilities: string[]
+  /** Resolved tenant echoed back by the backend when X-Tenant-ID is sent. */
+  tenant?: string
 }
 
 export interface EntityRecord {

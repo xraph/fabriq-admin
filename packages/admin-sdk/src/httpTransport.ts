@@ -14,6 +14,12 @@ export interface HttpTransportOptions {
   fetchImpl?: typeof fetch
   /** Default headers merged into every request. */
   headers?: Record<string, string>
+  /**
+   * Dynamic headers — called on every request. The result is merged AFTER the
+   * static `headers` but BEFORE fixed protocol headers (Content-Type, Accept),
+   * so the latter always win. Useful for injecting a per-call tenant header.
+   */
+  getHeaders?: () => Record<string, string>
 }
 
 /**
@@ -29,6 +35,7 @@ export function createHttpTransport({
   baseUrl,
   fetchImpl,
   headers: defaultHeaders = {},
+  getHeaders,
 }: HttpTransportOptions): FabriqTransport {
   const base = baseUrl.replace(/\/$/, "")
   const _fetch: typeof fetch = fetchImpl ?? globalThis.fetch
@@ -63,11 +70,12 @@ export function createHttpTransport({
     }
 
     const hasBody = opts.body !== undefined
+    const dynamicHeaders = getHeaders ? getHeaders() : {}
     const res = await _fetch(url, {
       method: opts.method ?? "GET",
       headers: hasBody
-        ? { ...defaultHeaders, "Content-Type": "application/json" }
-        : { ...defaultHeaders },
+        ? { ...defaultHeaders, ...dynamicHeaders, "Content-Type": "application/json" }
+        : { ...defaultHeaders, ...dynamicHeaders },
       body: hasBody ? JSON.stringify(opts.body) : undefined,
       signal: opts.signal,
     })
@@ -94,10 +102,12 @@ export function createHttpTransport({
       url = base + url
     }
 
+    const dynamicHeadersStream = getHeaders ? getHeaders() : {}
     const res = await _fetch(url, {
       method: "POST",
       headers: {
         ...defaultHeaders,
+        ...dynamicHeadersStream,
         "Content-Type": "application/json",
         Accept: "text/event-stream",
       },

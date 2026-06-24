@@ -133,6 +133,52 @@ describe("createHttpTransport – request", () => {
     const headers = (init as RequestInit).headers as Record<string, string>
     expect(headers["Content-Type"]).toBeUndefined()
   })
+
+  it("merges getHeaders() result into request headers", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({ ok: true, status: 200, body: {} }))
+    const transport = createHttpTransport({
+      baseUrl: "http://api.example.com",
+      getHeaders: () => ({ "X-Tenant-ID": "acme" }),
+      fetchImpl,
+    })
+    await transport.request({ method: "GET", path: "/meta" })
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers["X-Tenant-ID"]).toBe("acme")
+  })
+
+  it("re-reads getHeaders() on each request (dynamic)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({ ok: true, status: 200, body: {} }))
+    let tenant = "first"
+    const transport = createHttpTransport({
+      baseUrl: "http://api.example.com",
+      getHeaders: () => ({ "X-Tenant-ID": tenant }),
+      fetchImpl,
+    })
+
+    await transport.request({ method: "GET", path: "/meta" })
+    tenant = "second"
+    await transport.request({ method: "GET", path: "/meta" })
+
+    const [, init1] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    const [, init2] = fetchImpl.mock.calls[1] as [string, RequestInit]
+    expect((init1.headers as Record<string, string>)["X-Tenant-ID"]).toBe("first")
+    expect((init2.headers as Record<string, string>)["X-Tenant-ID"]).toBe("second")
+  })
+
+  it("getHeaders() values do not override Content-Type on requests with body", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({ ok: true, status: 201, body: { id: "1" } }))
+    const transport = createHttpTransport({
+      baseUrl: "http://api.example.com",
+      getHeaders: () => ({ "Content-Type": "text/plain", "X-Tenant-ID": "t1" }),
+      fetchImpl,
+    })
+    await transport.request({ method: "POST", path: "/plugins", body: { name: "x" } })
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers["Content-Type"]).toBe("application/json")
+    expect(headers["X-Tenant-ID"]).toBe("t1")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -204,5 +250,23 @@ describe("createHttpTransport – stream", () => {
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
     expect((init as RequestInit).method).toBe("POST")
     expect((init as RequestInit).body).toBe(JSON.stringify({ tenant: "acme" }))
+  })
+
+  it("merges getHeaders() into stream request headers", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeStreamResponse([""]))
+    const transport = createHttpTransport({
+      baseUrl: "http://api.example.com",
+      getHeaders: () => ({ "X-Tenant-ID": "stream-tenant" }),
+      fetchImpl,
+    })
+
+    for await (const _ of transport.stream({ path: "/watch" })) { /* drain */ }
+
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers["X-Tenant-ID"]).toBe("stream-tenant")
+    // Accept and Content-Type must still be set
+    expect(headers["Accept"]).toBe("text/event-stream")
+    expect(headers["Content-Type"]).toBe("application/json")
   })
 })

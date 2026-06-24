@@ -4,6 +4,9 @@ import React, {
   useMemo,
   type ComponentType,
 } from "react"
+import { TenantContext } from "./tenant"
+import { TenantSwitcher } from "./TenantSwitcher"
+import type { TenantStore } from "./tenant"
 import { QueryClient } from "@tanstack/react-query"
 import { FabriqClient } from "./client"
 import { FabriqProvider } from "./provider"
@@ -89,6 +92,11 @@ export interface FabriqAdminProps {
    * This is the key testability seam — tests must NEVER hit real Module Federation.
    */
   loadRemote?: (spec: NewRemotePluginSpec) => Promise<FabriqAdminPlugin>
+  /**
+   * Optional tenant store. When provided, the shell renders a TenantSwitcher in the
+   * sidebar header and provides the store via TenantContext so plugins can read it.
+   */
+  tenantStore?: TenantStore
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +140,7 @@ export function FabriqAdmin({
   queryClient,
   store,
   loadRemote,
+  tenantStore,
 }: FabriqAdminProps) {
   const { registry, plugins: pluginEntries, addRemote, removeRemote, reloadRemote } =
     usePluginManager({ plugins, store, loadRemote })
@@ -166,6 +175,7 @@ export function FabriqAdmin({
   }
 
   return (
+    <TenantContext.Provider value={tenantStore ?? null}>
     <FabriqProvider client={client} queryClient={queryClient}>
       <PluginHostContext.Provider value={hostValue}>
         <div
@@ -175,12 +185,13 @@ export function FabriqAdmin({
           {hasPlugins ? (
             <SidebarProvider>
               <Sidebar>
-                {/* Brand row */}
+                {/* Brand row + optional tenant switcher */}
                 <SidebarHeader>
                   <div className="flex items-center gap-2 px-2 py-1">
                     <Database className="h-5 w-5 text-primary" aria-hidden="true" />
                     <span className="font-semibold text-sm tracking-tight text-foreground">fabriq</span>
                   </div>
+                  {tenantStore && <TenantSwitcher store={tenantStore} />}
                 </SidebarHeader>
 
                 {/* Nav */}
@@ -264,5 +275,6 @@ export function FabriqAdmin({
         </div>
       </PluginHostContext.Provider>
     </FabriqProvider>
+    </TenantContext.Provider>
   )
 }

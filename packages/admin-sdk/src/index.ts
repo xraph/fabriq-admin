@@ -27,6 +27,11 @@ export type {
   CompositePluginStoreOptions,
 } from "./pluginStore"
 
+export { createTenantStore, useTenant, useTenantContext, TenantContext } from "./tenant"
+export type { TenantStore, TenantStoreOptions, UseTenantResult } from "./tenant"
+export { TenantSwitcher } from "./TenantSwitcher"
+export type { TenantSwitcherProps } from "./TenantSwitcher"
+
 // --- experimental: live streaming (no Phase 1 backend) ---
 // FabriqTransport.stream, FabriqClient.watch(), and WatchScope are re-exported
 // via `export * from "./client"` above. They are valid forward infrastructure for

@@ -2,6 +2,7 @@ import {
   FabriqAdmin,
   FabriqClient,
   createHttpTransport,
+  createTenantStore,
   loadRemotePlugin,
   compositePluginStore,
   httpPluginStore,
@@ -31,9 +32,11 @@ const baseUrl: string =
   (import.meta.env as Record<string, string | undefined>)["VITE_FABRIQ_API_URL"] ??
   "http://localhost:8080/admin"
 
+const tenantStore = createTenantStore()
+
 const client = new FabriqClient({
   baseUrl,
-  transport: createHttpTransport({ baseUrl }),
+  transport: createHttpTransport({ baseUrl, getHeaders: () => tenantStore.headers() }),
 })
 
 // Plugin persistence: try the backend HTTP store first; fall back to localStorage.
@@ -57,6 +60,7 @@ export function App() {
       plugins={plugins}
       theme="system"
       store={store}
+      tenantStore={tenantStore}
       loadRemote={(spec) =>
         loadRemotePlugin({
           url: spec.url,
