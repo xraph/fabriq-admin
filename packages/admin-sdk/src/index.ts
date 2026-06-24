@@ -12,6 +12,8 @@ export { createHttpTransport, HttpTransportError } from "./httpTransport"
 export type { HttpTransportOptions } from "./httpTransport"
 export { loadRemotePlugin } from "./remoteLoader"
 export type { RemotePluginOptions } from "./remoteLoader"
+export { PluginErrorBoundary } from "./PluginErrorBoundary"
+export type { PluginErrorBoundaryProps } from "./PluginErrorBoundary"
 export {
   localStoragePluginStore,
   httpPluginStore,

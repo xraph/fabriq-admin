@@ -12,6 +12,7 @@ import { PluginRegistry } from "./registry"
 import { matchRoute, useInternalRouter, type RouterState } from "./router"
 import { useResolvedTheme, type ThemeProp, type ResolvedTheme } from "./theme"
 import { resolveIcon } from "./icons"
+import { PluginErrorBoundary } from "./PluginErrorBoundary"
 import { cn, Button, ScrollArea } from "@fabriq/ui"
 import {
   Database,
@@ -199,7 +200,9 @@ function AdminMain({
   const El = match.route.element as ComponentType<{ params?: Record<string, string> }>
   return (
     <main className="flex-1 overflow-auto p-6">
-      <El params={match.params} />
+      <PluginErrorBoundary resetKey={path}>
+        <El params={match.params} />
+      </PluginErrorBoundary>
     </main>
   )
 }

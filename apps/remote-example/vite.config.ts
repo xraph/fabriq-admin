@@ -24,6 +24,12 @@ export default defineConfig({
         react: { singleton: true, requiredVersion: false },
         "react-dom": { singleton: true, requiredVersion: false },
         "@tanstack/react-query": { singleton: true, requiredVersion: false },
+        // Consume the host's admin-sdk/ui so React contexts (FabriqClientContext,
+        // PluginHostContext, theme) share identity across the boundary. Without
+        // this the remote bundles its own copy and useFabriqClient throws
+        // "must be used within <FabriqProvider>".
+        "@fabriq/admin-sdk": { singleton: true, requiredVersion: false },
+        "@fabriq/ui": { singleton: true, requiredVersion: false },
       },
     }),
   ],

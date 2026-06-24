@@ -9,6 +9,21 @@ import {
 } from "@fabriq/admin-sdk"
 import { entityBrowserPlugin } from "@fabriq/plugin-entity-browser"
 import { pluginsManagerPlugin } from "@fabriq/plugin-plugins-manager"
+import {
+  __federation_method_setRemote,
+  __federation_method_getRemote,
+  __federation_method_unwrapDefault,
+} from "virtual:__federation__"
+
+// @originjs/vite-plugin-federation runtime helpers. These live in the
+// "virtual:__federation__" module (NOT on `window`), so the host must import
+// them and hand them to loadRemotePlugin. They share the host's module scope,
+// giving the remote the host's React/react-dom/@tanstack/react-query instances.
+const federationRuntime = {
+  setRemote: __federation_method_setRemote,
+  getRemote: __federation_method_getRemote,
+  unwrapDefault: __federation_method_unwrapDefault,
+}
 
 // Read the API base URL from the environment (injected by Vite at build/dev time).
 // Defaults to http://localhost:8080/admin for local development.
@@ -47,11 +62,7 @@ export function App() {
           url: spec.url,
           scope: spec.scope,
           module: spec.module,
-          // federationRuntime is NOT injected here — loadRemotePlugin reads
-          // __federation_method_* from window at call-time (SSR-safe, no module-scope access).
-          // When the host is built with @originjs/vite-plugin-federation those
-          // globals are present and the @originjs path is used automatically,
-          // sharing the host's React/react-dom/@tanstack/react-query instances.
+          federationRuntime,
         })
       }
     />

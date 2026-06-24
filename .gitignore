@@ -6,3 +6,4 @@ dist
 # scratch task/fix reports
 .task-*-report.md
 .fix-report.md
+.p*-report.md
