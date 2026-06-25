@@ -4,12 +4,13 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import {
   FabriqClient,
   FabriqAdmin,
+  FabriqProvider,
   QueryClient,
   type FabriqTransport,
   type EntityRecord,
   type EntityPage,
 } from "@fabriq/admin-sdk"
-import { entityBrowserPlugin, EntityList, EntityDetail } from "./index"
+import { entityBrowserPlugin, EntityList, EntityDetail, EntityForm } from "./index"
 
 const ENTITY_A: EntityRecord = { id: "ent-1", type: "node", data: { label: "Alpha", score: 42 } }
 const ENTITY_B: EntityRecord = { id: "ent-2", type: "node", data: { label: "Beta" } }
@@ -19,6 +20,16 @@ function makeFakeTransport(opts?: { rejectList?: boolean }): FabriqTransport {
   return {
     async request<T>(reqOpts: { path: string; query?: Record<string, string | number | undefined> }): Promise<T> {
       const { path } = reqOpts
+      // /entities/types must be checked before the generic /entities/:id matcher.
+      if (path.endsWith("/entities/types")) {
+        return { types: ["node"] } as unknown as T
+      }
+      if (path.endsWith("/schema")) {
+        return {
+          type: reqOpts.query?.type ?? "node",
+          fields: [{ name: "label", kind: "string", required: true }],
+        } as unknown as T
+      }
       if (opts?.rejectList && path.includes("/entities") && !path.match(/\/entities\/.+/)) {
         throw new Error("network error")
       }
@@ -270,6 +281,9 @@ describe("EntityList -> EntityDetail navigation", () => {
     const recordingTransport: FabriqTransport = {
       async request<T>(reqOpts: { path: string; query?: Record<string, string | number | undefined> }): Promise<T> {
         calls.push({ path: reqOpts.path, query: reqOpts.query })
+        if (reqOpts.path.endsWith("/entities/types")) {
+          return { types: ["node"] } as unknown as T
+        }
         if (reqOpts.path.match(/\/entities\/(.+)$/)) {
           return ENTITY_A as unknown as T
         }
@@ -287,7 +301,9 @@ describe("EntityList -> EntityDetail navigation", () => {
     const row = await screen.findByText("ent-1")
     fireEvent.click(row)
     await screen.findByText(/42/)
-    const entityCall = calls.find((c) => c.path.match(/\/entities\/.+/))
+    const entityCall = calls.find(
+      (c) => c.path.match(/\/entities\/.+/) && !c.path.endsWith("/entities/types"),
+    )
     expect(entityCall).toBeDefined()
     expect(entityCall?.query).toMatchObject({ type: "node" })
   })
@@ -374,5 +390,259 @@ describe("EntityDetail", () => {
     } finally {
       clip.restore()
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// CRUD harness — records mutation calls; serves a 2-field schema
+// ---------------------------------------------------------------------------
+
+type Call = {
+  method?: string
+  path: string
+  body?: unknown
+  query?: Record<string, string | number | undefined>
+}
+
+const TWO_FIELD_SCHEMA = {
+  type: "product",
+  fields: [
+    { name: "name", kind: "string", required: true },
+    { name: "qty", kind: "number", required: false },
+  ],
+}
+
+function makeCrudTransport(calls: Call[]): FabriqTransport {
+  return {
+    async request<T>(reqOpts: Call): Promise<T> {
+      calls.push({
+        method: reqOpts.method,
+        path: reqOpts.path,
+        body: reqOpts.body,
+        query: reqOpts.query,
+      })
+      const { path, method } = reqOpts
+      if (path.endsWith("/entities/types")) {
+        return { types: ["product"] } as unknown as T
+      }
+      if (path.endsWith("/schema")) {
+        return TWO_FIELD_SCHEMA as unknown as T
+      }
+      if ((method ?? "GET").toUpperCase() === "POST") {
+        return { id: "new-1", type: "product", data: {} } as unknown as T
+      }
+      if ((method ?? "GET").toUpperCase() === "PUT") {
+        return { id: "ent-1", type: "product", data: {} } as unknown as T
+      }
+      if ((method ?? "GET").toUpperCase() === "DELETE") {
+        return undefined as unknown as T
+      }
+      const idMatch = path.match(/\/entities\/(.+)$/)
+      if (idMatch) {
+        return {
+          id: "ent-1",
+          type: "product",
+          data: { name: "Widget", qty: 7 },
+        } as unknown as T
+      }
+      const page: EntityPage = { items: [{ id: "ent-1", type: "product", data: { name: "Widget" } }] }
+      return page as unknown as T
+    },
+    async *stream(): AsyncIterable<unknown> {},
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EntityForm (unit) — schema-driven fields, parsing, validation
+// ---------------------------------------------------------------------------
+
+describe("EntityForm", () => {
+  function renderForm(
+    props: Partial<React.ComponentProps<typeof EntityForm>> = {},
+  ) {
+    const calls: Call[] = []
+    const client = new FabriqClient({ baseUrl: "http://test", transport: makeCrudTransport(calls) })
+    const onSubmit = props.onSubmit ?? vi.fn().mockResolvedValue(undefined)
+    const onCancel = props.onCancel ?? vi.fn()
+    render(
+      <FabriqProvider client={client}>
+        <EntityForm type="product" onSubmit={onSubmit} onCancel={onCancel} {...props} />
+      </FabriqProvider>,
+    )
+    return { onSubmit, onCancel }
+  }
+
+  it("renders one field per schema descriptor", async () => {
+    renderForm()
+    await screen.findByLabelText("name")
+    await screen.findByLabelText("qty")
+  })
+
+  it("submits parsed values (number parsed to a number)", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    renderForm({ onSubmit })
+    fireEvent.change(await screen.findByLabelText("name"), { target: { value: "Gadget" } })
+    fireEvent.change(await screen.findByLabelText("qty"), { target: { value: "5" } })
+    fireEvent.click(screen.getByRole("button", { name: /save/i }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(onSubmit).toHaveBeenCalledWith({ name: "Gadget", qty: 5 })
+  })
+
+  it("blocks submit and shows error when a required field is empty", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    renderForm({ onSubmit })
+    await screen.findByLabelText("name")
+    fireEvent.click(screen.getByRole("button", { name: /save/i }))
+    await screen.findByText(/name is required/i)
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it("parses a JSON object field on submit", async () => {
+    const jsonCalls: Call[] = []
+    const transport: FabriqTransport = {
+      async request<T>(reqOpts: Call): Promise<T> {
+        jsonCalls.push(reqOpts)
+        if (reqOpts.path.endsWith("/schema")) {
+          return {
+            type: "product",
+            fields: [{ name: "meta", kind: "object", required: true }],
+          } as unknown as T
+        }
+        return {} as T
+      },
+      async *stream(): AsyncIterable<unknown> {},
+    }
+    const client = new FabriqClient({ baseUrl: "http://test", transport })
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(
+      <FabriqProvider client={client}>
+        <EntityForm type="product" onSubmit={onSubmit} onCancel={vi.fn()} />
+      </FabriqProvider>,
+    )
+    const meta = await screen.findByLabelText("meta")
+    fireEvent.change(meta, { target: { value: '{"a":1}' } })
+    fireEvent.click(screen.getByRole("button", { name: /save/i }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(onSubmit).toHaveBeenCalledWith({ meta: { a: 1 } })
+  })
+
+  it("shows inline error for invalid JSON", async () => {
+    const transport: FabriqTransport = {
+      async request<T>(reqOpts: Call): Promise<T> {
+        if (reqOpts.path.endsWith("/schema")) {
+          return {
+            type: "product",
+            fields: [{ name: "meta", kind: "object", required: true }],
+          } as unknown as T
+        }
+        return {} as T
+      },
+      async *stream(): AsyncIterable<unknown> {},
+    }
+    const client = new FabriqClient({ baseUrl: "http://test", transport })
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(
+      <FabriqProvider client={client}>
+        <EntityForm type="product" onSubmit={onSubmit} onCancel={vi.fn()} />
+      </FabriqProvider>,
+    )
+    const meta = await screen.findByLabelText("meta")
+    fireEvent.change(meta, { target: { value: "{not json" } })
+    fireEvent.click(screen.getByRole("button", { name: /save/i }))
+    await screen.findByText(/must be valid json/i)
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it("pre-fills initial values", async () => {
+    renderForm({ initial: { name: "Widget", qty: 7 } })
+    const name = (await screen.findByLabelText("name")) as HTMLInputElement
+    expect(name.value).toBe("Widget")
+    const qty = (await screen.findByLabelText("qty")) as HTMLInputElement
+    expect(qty.value).toBe("7")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Create flow — EntityList "New product" -> dialog -> createEntity
+// ---------------------------------------------------------------------------
+
+describe("EntityList — create flow", () => {
+  it("opens the create dialog and calls createEntity with {type,data}", async () => {
+    const calls: Call[] = []
+    const client = new FabriqClient({ baseUrl: "http://test", transport: makeCrudTransport(calls) })
+    render(<FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />)
+
+    fireEvent.change(screen.getByRole("textbox", { name: /entity type/i }), {
+      target: { value: "product" },
+    })
+    const newBtn = await screen.findByRole("button", { name: /new product/i })
+    fireEvent.click(newBtn)
+
+    // Form (schema-driven) appears in the dialog
+    fireEvent.change(await screen.findByLabelText("name"), { target: { value: "Gadget" } })
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }))
+
+    await waitFor(() => {
+      const post = calls.find((c) => (c.method ?? "").toUpperCase() === "POST")
+      expect(post).toBeDefined()
+      expect(post?.path).toMatch(/\/entities$/)
+      expect(post?.body).toEqual({ type: "product", data: { name: "Gadget" } })
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Edit flow — EntityDetail "Edit" -> prefilled form -> updateEntity
+// ---------------------------------------------------------------------------
+
+describe("EntityDetail — edit flow", () => {
+  it("opens a prefilled form and calls updateEntity(id,{type,data})", async () => {
+    const calls: Call[] = []
+    const client = new FabriqClient({ baseUrl: "http://test", transport: makeCrudTransport(calls) })
+    render(
+      <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities/product/ent-1" />,
+    )
+
+    const editBtn = await screen.findByRole("button", { name: /edit/i })
+    fireEvent.click(editBtn)
+
+    const name = (await screen.findByLabelText("name")) as HTMLInputElement
+    expect(name.value).toBe("Widget")
+    fireEvent.change(name, { target: { value: "Renamed" } })
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }))
+
+    await waitFor(() => {
+      const put = calls.find((c) => (c.method ?? "").toUpperCase() === "PUT")
+      expect(put).toBeDefined()
+      expect(put?.path).toMatch(/\/entities\/ent-1$/)
+      expect(put?.body).toMatchObject({ type: "product", data: { name: "Renamed", qty: 7 } })
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Delete flow — EntityDetail "Delete" -> confirm -> deleteEntity + navigate
+// ---------------------------------------------------------------------------
+
+describe("EntityDetail — delete flow", () => {
+  it("confirms then calls deleteEntity(id,{type}) and navigates to the list", async () => {
+    const calls: Call[] = []
+    const client = new FabriqClient({ baseUrl: "http://test", transport: makeCrudTransport(calls) })
+    render(
+      <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities/product/ent-1" />,
+    )
+
+    fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }))
+    const confirm = await screen.findByRole("button", { name: /confirm delete/i })
+    fireEvent.click(confirm)
+
+    await waitFor(() => {
+      const del = calls.find((c) => (c.method ?? "").toUpperCase() === "DELETE")
+      expect(del).toBeDefined()
+      expect(del?.path).toMatch(/\/entities\/ent-1$/)
+      expect(del?.query).toEqual({ type: "product" })
+    })
+    // Navigated back to the list (type prompt visible)
+    await screen.findByText(/enter an entity type to browse/i)
   })
 })

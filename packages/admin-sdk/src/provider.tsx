@@ -3,14 +3,16 @@ import {
   QueryClient,
   QueryClientProvider,
   useQuery,
+  useQueryClient,
   type UseQueryOptions,
   type UseQueryResult,
 } from "@tanstack/react-query"
 import { FabriqClient } from "./client"
 
-// Re-export QueryClient so plugin authors and tests can configure it without
-// reaching into @tanstack/react-query directly.
-export { QueryClient }
+// Re-export QueryClient + useQueryClient so plugin authors and tests can
+// configure/invalidate the cache without reaching into @tanstack/react-query
+// directly (it is not a direct dependency of plugin packages).
+export { QueryClient, useQueryClient }
 
 // ---------------------------------------------------------------------------
 // Context

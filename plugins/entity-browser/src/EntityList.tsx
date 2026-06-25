@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from "react"
-import { useFabriqQuery, usePluginHost, type EntityRecord } from "@fabriq/admin-sdk"
+import {
+  useFabriqQuery,
+  useFabriqClient,
+  useQueryClient,
+  usePluginHost,
+  type EntityRecord,
+} from "@fabriq/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -19,8 +25,14 @@ import {
   Alert,
   AlertTitle,
   AlertDescription,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
 } from "@fabriq/ui"
-import { Search, Database } from "lucide-react"
+import { Search, Database, Plus } from "lucide-react"
+import { EntityForm } from "./EntityForm"
 
 const PAGE_LIMIT = 50
 
@@ -32,8 +44,38 @@ export function EntityList() {
   // Track which (type, cursor) combinations we have already appended to prevent double-append
   const appendedRef = useRef<Set<string>>(new Set())
   const { navigate } = usePluginHost()
+  const client = useFabriqClient()
+  const queryClient = useQueryClient()
+
+  const [createOpen, setCreateOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
 
   const trimmedType = type.trim()
+
+  // Known dynamic types — rendered as quick-pick chips below the input.
+  const { data: knownTypes } = useFabriqQuery(
+    ["entity-types"],
+    (c) => c.listEntityTypes(),
+  )
+
+  // Reset accumulation for the active type and refetch its first page.
+  async function refreshList() {
+    appendedRef.current = new Set()
+    setAccumulated((prev) => ({ ...prev, [trimmedType]: [] }))
+    setCursor(undefined)
+    await queryClient.invalidateQueries({ queryKey: ["entities", trimmedType] })
+  }
+
+  async function handleCreate(data: Record<string, unknown>) {
+    setCreating(true)
+    try {
+      await client.createEntity({ type: trimmedType, data })
+      setCreateOpen(false)
+      await refreshList()
+    } finally {
+      setCreating(false)
+    }
+  }
 
   // Reset cursor and accumulation whenever type changes
   useEffect(() => {
@@ -89,17 +131,68 @@ export function EntityList() {
       </CardHeader>
       <CardContent>
         {/* Type filter toolbar */}
-        <div className="relative mb-4">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="entity-type-input"
-            aria-label="Entity type"
-            placeholder="Entity type (e.g. order)..."
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="pl-8"
-          />
+        <div className="mb-4">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="entity-type-input"
+                aria-label="Entity type"
+                placeholder="Entity type (e.g. order)..."
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            {trimmedType.length > 0 && (
+              <Button
+                onClick={() => setCreateOpen(true)}
+                aria-label={`New ${trimmedType}`}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                New {trimmedType}
+              </Button>
+            )}
+          </div>
+
+          {/* Quick-pick type chips */}
+          {knownTypes && knownTypes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2" aria-label="Known types">
+              {knownTypes.map((t) => (
+                <Button
+                  key={t}
+                  type="button"
+                  size="sm"
+                  variant={t === trimmedType ? "secondary" : "outline"}
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setType(t)}
+                >
+                  {t}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* Create dialog */}
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>New {trimmedType}</DialogTitle>
+              <DialogDescription>
+                Create a new <strong>{trimmedType}</strong> entity.
+              </DialogDescription>
+            </DialogHeader>
+            {createOpen && (
+              <EntityForm
+                type={trimmedType}
+                onSubmit={handleCreate}
+                onCancel={() => setCreateOpen(false)}
+                submitting={creating}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Empty state — before a type is entered */}
         {trimmedType.length === 0 && (

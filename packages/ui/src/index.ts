@@ -90,3 +90,15 @@ export {
   PopoverTrigger,
   PopoverContent,
 } from "./components/ui/popover"
+export {
+  Dialog,
+  DialogTrigger,
+  DialogClose,
+  DialogPortal,
+  DialogOverlay,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "./components/ui/dialog"

@@ -1,6 +1,7 @@
 import { definePlugin } from "@fabriq/admin-sdk"
 import { EntityList } from "./EntityList"
 import { EntityDetail } from "./EntityDetail"
+import { EntityForm } from "./EntityForm"
 
 export const entityBrowserPlugin = definePlugin({
   id: "fabriq.entity-browser",
@@ -14,4 +15,4 @@ export const entityBrowserPlugin = definePlugin({
   ],
 })
 
-export { EntityList, EntityDetail }
+export { EntityList, EntityDetail, EntityForm }

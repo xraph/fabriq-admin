@@ -47,6 +47,32 @@ export interface WatchScope {
 }
 
 /**
+ * Field kind reported by the backend schema endpoint. The wire format may carry
+ * any string; consumers should treat unknown kinds like `"unknown"`.
+ */
+export type EntityFieldKind =
+  | "string"
+  | "number"
+  | "boolean"
+  | "object"
+  | "array"
+  | "unknown"
+
+/** A single field descriptor from `GET /schema`. */
+export interface EntityField {
+  name: string
+  /** One of EntityFieldKind, but accept any string for forward-compat. */
+  kind: string
+  required: boolean
+}
+
+/** Schema descriptor for a dynamic entity type. */
+export interface EntitySchema {
+  type: string
+  fields: EntityField[]
+}
+
+/**
  * Wire-format representation of a remote plugin as returned/accepted by the
  * admin API. Named separately from pluginStore.RemotePluginSpec to avoid a
  * circular module dependency; pluginStore re-exports these as its own types.
@@ -117,6 +143,57 @@ export class FabriqClient {
       method: "GET",
       path: `${this.baseUrl}/entities/${encodeURIComponent(id)}`,
       ...(query ? { query } : {}),
+    })
+  }
+
+  /** POST /entities — create a new entity; body `{type,data}` → created record */
+  createEntity(input: {
+    type: string
+    data: Record<string, unknown>
+  }): Promise<EntityRecord> {
+    return this.transport.request<EntityRecord>({
+      method: "POST",
+      path: `${this.baseUrl}/entities`,
+      body: input,
+    })
+  }
+
+  /** PUT /entities/:id — full-replace an entity; body `{type,data}` → updated record */
+  updateEntity(
+    id: string,
+    input: { type: string; data: Record<string, unknown> },
+  ): Promise<EntityRecord> {
+    return this.transport.request<EntityRecord>({
+      method: "PUT",
+      path: `${this.baseUrl}/entities/${encodeURIComponent(id)}`,
+      body: input,
+    })
+  }
+
+  /** DELETE /entities/:id?type=<T> — `type` is required by the backend */
+  deleteEntity(id: string, params: { type: string }): Promise<void> {
+    return this.transport.request<void>({
+      method: "DELETE",
+      path: `${this.baseUrl}/entities/${encodeURIComponent(id)}`,
+      query: { type: params.type },
+    })
+  }
+
+  /** GET /entities/types — registered dynamic entity types */
+  async listEntityTypes(): Promise<string[]> {
+    const res = await this.transport.request<{ types?: string[] }>({
+      method: "GET",
+      path: `${this.baseUrl}/entities/types`,
+    })
+    return res?.types ?? []
+  }
+
+  /** GET /schema?type=<T> — field descriptors for a dynamic entity type */
+  getEntitySchema(type: string): Promise<EntitySchema> {
+    return this.transport.request<EntitySchema>({
+      method: "GET",
+      path: `${this.baseUrl}/schema`,
+      query: { type },
     })
   }
 

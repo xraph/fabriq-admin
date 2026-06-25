@@ -1,5 +1,10 @@
 import React, { useState, useCallback } from "react"
-import { useFabriqQuery, usePluginHost } from "@fabriq/admin-sdk"
+import {
+  useFabriqQuery,
+  useFabriqClient,
+  useQueryClient,
+  usePluginHost,
+} from "@fabriq/admin-sdk"
 import {
   Button,
   Card,
@@ -17,8 +22,15 @@ import {
   TableRow,
   TableHead,
   TableCell,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@fabriq/ui"
-import { ArrowLeft, Copy, Check } from "lucide-react"
+import { ArrowLeft, Copy, Check, Pencil, Trash2 } from "lucide-react"
+import { EntityForm } from "./EntityForm"
 
 function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false)
@@ -93,13 +105,42 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
   const id = params?.id ?? ""
   const type = params?.type ?? ""
   const { navigate } = usePluginHost()
+  const client = useFabriqClient()
+  const queryClient = useQueryClient()
   const [view, setView] = useState<ViewMode>("fields")
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const { data, isLoading, isError } = useFabriqQuery(
     ["entity", type, id],
     (client) => client.getEntity(id, { type }),
     { enabled: Boolean(id) && Boolean(type) },
   )
+
+  async function handleEdit(nextData: Record<string, unknown>) {
+    setSaving(true)
+    try {
+      await client.updateEntity(id, { type, data: nextData })
+      setEditOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ["entity", type, id] })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await client.deleteEntity(id, { type })
+      setDeleteOpen(false)
+      navigate("entities")
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -163,6 +204,20 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
                 </Button>
                 <CopyButton value={data.id} label="Copy ID" />
                 <CopyButton value={JSON.stringify(data.data, null, 2)} label="Copy JSON" />
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} aria-label="Edit">
+                  <Pencil className="h-3 w-3 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                  aria-label="Delete"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  Delete
+                </Button>
               </div>
             </div>
             <div className="flex gap-1 mt-3" role="group" aria-label="View mode">
@@ -191,6 +246,53 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
           </CardContent>
         </Card>
       )}
+
+      {/* Edit dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit {type}</DialogTitle>
+            <DialogDescription>
+              Update the fields of this <strong>{type}</strong> entity.
+            </DialogDescription>
+          </DialogHeader>
+          {editOpen && data && (
+            <EntityForm
+              type={type}
+              initial={data.data}
+              onSubmit={handleEdit}
+              onCancel={() => setEditOpen(false)}
+              submitting={saving}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Delete entity?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes <span className="font-mono">{id}</span>. This
+              action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleting}
+              aria-label="Confirm delete"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -111,6 +111,98 @@ describe("FabriqClient", () => {
     expect(transport.lastRequest?.query).toEqual({ type: "orders" })
   })
 
+  it("createEntity — POSTs /entities with {type,data} body", async () => {
+    const transport = new FakeTransport()
+    const created = { id: "new-1", type: "product", data: { name: "Widget" } }
+    transport.setRequestResponse(created)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.createEntity({ type: "product", data: { name: "Widget" } })
+
+    expect(result).toEqual(created)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/entities")
+    expect(transport.lastRequest?.body).toEqual({ type: "product", data: { name: "Widget" } })
+  })
+
+  it("updateEntity — PUTs /entities/:id with {type,data} body", async () => {
+    const transport = new FakeTransport()
+    const updated = { id: "ent-1", type: "product", data: { name: "Renamed" } }
+    transport.setRequestResponse(updated)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.updateEntity("ent-1", { type: "product", data: { name: "Renamed" } })
+
+    expect(result).toEqual(updated)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("PUT")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/entities/ent-1")
+    expect(transport.lastRequest?.body).toEqual({ type: "product", data: { name: "Renamed" } })
+  })
+
+  it("updateEntity — encodes the id in the path", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ id: "a/b", type: "product", data: {} })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.updateEntity("a/b", { type: "product", data: {} })
+
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/entities/a%2Fb")
+  })
+
+  it("deleteEntity — DELETEs /entities/:id with type query param", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse(undefined)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.deleteEntity("ent-1", { type: "product" })
+
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("DELETE")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/entities/ent-1")
+    expect(transport.lastRequest?.query).toEqual({ type: "product" })
+  })
+
+  it("listEntityTypes — GETs /entities/types and unwraps .types", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ types: ["product", "order"] })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.listEntityTypes()
+
+    expect(result).toEqual(["product", "order"])
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/entities/types")
+  })
+
+  it("listEntityTypes — returns [] when types is absent", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({})
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.listEntityTypes()
+
+    expect(result).toEqual([])
+  })
+
+  it("getEntitySchema — GETs /schema with type query param", async () => {
+    const transport = new FakeTransport()
+    const schema = {
+      type: "product",
+      fields: [
+        { name: "name", kind: "string", required: true },
+        { name: "price", kind: "number", required: false },
+      ],
+    }
+    transport.setRequestResponse(schema)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.getEntitySchema("product")
+
+    expect(result).toEqual(schema)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/schema")
+    expect(transport.lastRequest?.query).toEqual({ type: "product" })
+  })
+
   it("watch — calls stream with /watch path and yields events", async () => {
     const transport = new FakeTransport()
     const events = [{ type: "delta", id: "1" }, { type: "delta", id: "2" }]
