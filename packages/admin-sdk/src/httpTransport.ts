@@ -1,4 +1,12 @@
-import type { FabriqTransport } from "./client"
+import type { FabriqTransport, RawRequestOptions, RawResponse } from "./client"
+
+/** Monotonic time source, guarded for SSR (no `performance` global). */
+function now(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now()
+  }
+  return Date.now()
+}
 
 // ---------------------------------------------------------------------------
 // createHttpTransport
@@ -89,6 +97,68 @@ export function createHttpTransport({
   }
 
   // -------------------------------------------------------------------------
+  // rawRequest — inspectable; returns full metadata, never throws on non-2xx
+  // -------------------------------------------------------------------------
+
+  async function rawRequest(opts: RawRequestOptions): Promise<RawResponse> {
+    let url = opts.path
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = base + url
+    }
+
+    if (opts.query && Object.keys(opts.query).length > 0) {
+      const params = new URLSearchParams()
+      for (const [k, v] of Object.entries(opts.query)) {
+        if (v !== undefined) {
+          params.set(k, v)
+        }
+      }
+      const qs = params.toString()
+      if (qs) url += (url.includes("?") ? "&" : "?") + qs
+    }
+
+    const hasBody = opts.body !== undefined
+    const dynamicHeaders = getHeaders ? getHeaders() : {}
+    const reqHeaders: Record<string, string> = hasBody
+      ? { ...defaultHeaders, ...dynamicHeaders, "Content-Type": "application/json" }
+      : { ...defaultHeaders, ...dynamicHeaders }
+
+    const start = now()
+    const res = await _fetch(url, {
+      method: opts.method,
+      headers: reqHeaders,
+      body: hasBody ? opts.body : undefined,
+      signal: opts.signal,
+    })
+    const durationMs = now() - start
+
+    const headers: Record<string, string> = {}
+    if (res.headers && typeof res.headers.forEach === "function") {
+      res.headers.forEach((value, key) => {
+        headers[key] = value
+      })
+    }
+
+    const bodyText = await res.text()
+    let json: unknown
+    try {
+      json = bodyText ? JSON.parse(bodyText) : undefined
+    } catch {
+      // Not JSON — leave json undefined, bodyText carries the raw text.
+    }
+
+    return {
+      status: res.status,
+      ok: res.ok,
+      statusText: res.statusText,
+      headers,
+      durationMs,
+      bodyText,
+      json,
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // stream — SSE via POST
   // -------------------------------------------------------------------------
 
@@ -169,7 +239,7 @@ export function createHttpTransport({
     }
   }
 
-  return { request, stream }
+  return { request, rawRequest, stream }
 }
 
 // ---------------------------------------------------------------------------

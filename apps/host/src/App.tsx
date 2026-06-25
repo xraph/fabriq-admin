@@ -11,6 +11,7 @@ import {
 import { overviewPlugin } from "@fabriq/plugin-overview"
 import { entityBrowserPlugin } from "@fabriq/plugin-entity-browser"
 import { pluginsManagerPlugin } from "@fabriq/plugin-plugins-manager"
+import { apiConsolePlugin } from "@fabriq/plugin-api-console"
 import {
   __federation_method_setRemote,
   __federation_method_getRemote,
@@ -52,7 +53,7 @@ const store = compositePluginStore({
 })
 
 // Builtin plugins — always mounted. Overview is first (order 0 / index route "").
-const plugins = [overviewPlugin, entityBrowserPlugin, pluginsManagerPlugin]
+const plugins = [overviewPlugin, entityBrowserPlugin, pluginsManagerPlugin, apiConsolePlugin]
 
 export function App() {
   return (

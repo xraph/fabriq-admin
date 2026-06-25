@@ -6,6 +6,7 @@ import {
   Circle,
   Plug,
   Settings,
+  Terminal,
   type LucideIcon,
 } from "lucide-react"
 
@@ -27,6 +28,8 @@ export function resolveIcon(name?: string): LucideIcon {
       return Plug
     case "settings":
       return Settings
+    case "console":
+      return Terminal
     default:
       return Circle
   }

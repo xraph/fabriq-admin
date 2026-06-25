@@ -10,11 +10,20 @@ function makeResponse(opts: {
   status: number
   body?: unknown
   text?: string
+  statusText?: string
+  headers?: Record<string, string>
 }): Response {
   const json = opts.body !== undefined ? JSON.stringify(opts.body) : ""
+  const headerEntries = Object.entries(opts.headers ?? {})
   return {
     ok: opts.ok,
     status: opts.status,
+    statusText: opts.statusText ?? "",
+    headers: {
+      forEach: (cb: (value: string, key: string) => void) => {
+        for (const [k, v] of headerEntries) cb(v, k)
+      },
+    },
     json: async () => opts.body,
     text: async () => opts.text ?? json,
   } as unknown as Response
@@ -178,6 +187,92 @@ describe("createHttpTransport – request", () => {
     const headers = (init as RequestInit).headers as Record<string, string>
     expect(headers["Content-Type"]).toBe("application/json")
     expect(headers["X-Tenant-ID"]).toBe("t1")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// rawRequest()
+// ---------------------------------------------------------------------------
+
+describe("createHttpTransport – rawRequest", () => {
+  it("returns status/headers/bodyText/json on a 200 response", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      makeResponse({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: { "content-type": "application/json" },
+        body: { name: "fabriq", version: "1" },
+      }),
+    )
+    const transport = createHttpTransport({ baseUrl: "http://api.example.com", fetchImpl })
+    const res = await transport.rawRequest({ method: "GET", path: "/meta" })
+
+    expect(res.status).toBe(200)
+    expect(res.ok).toBe(true)
+    expect(res.statusText).toBe("OK")
+    expect(res.headers["content-type"]).toBe("application/json")
+    expect(res.json).toEqual({ name: "fabriq", version: "1" })
+    expect(res.bodyText).toBe(JSON.stringify({ name: "fabriq", version: "1" }))
+    expect(typeof res.durationMs).toBe("number")
+  })
+
+  it("does NOT throw on a 500 response and returns the error body", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      makeResponse({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        text: "boom",
+      }),
+    )
+    const transport = createHttpTransport({ baseUrl: "http://api.example.com", fetchImpl })
+    const res = await transport.rawRequest({ method: "GET", path: "/meta" })
+
+    expect(res.status).toBe(500)
+    expect(res.ok).toBe(false)
+    expect(res.bodyText).toBe("boom")
+    // "boom" is not JSON → json stays undefined
+    expect(res.json).toBeUndefined()
+  })
+
+  it("includes getHeaders() (tenant) in the sent request headers", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({ ok: true, status: 200, body: {} }))
+    const transport = createHttpTransport({
+      baseUrl: "http://api.example.com",
+      getHeaders: () => ({ "X-Tenant-ID": "acme" }),
+      fetchImpl,
+    })
+    await transport.rawRequest({ method: "GET", path: "/meta" })
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers["X-Tenant-ID"]).toBe("acme")
+  })
+
+  it("builds the query string from the query map", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({ ok: true, status: 200, body: {} }))
+    const transport = createHttpTransport({ baseUrl: "http://api.example.com", fetchImpl })
+    await transport.rawRequest({
+      method: "GET",
+      path: "/entities",
+      query: { type: "product", cursor: undefined },
+    })
+    const [url] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    const parsed = new URL(url)
+    expect(parsed.pathname).toBe("/entities")
+    expect(parsed.searchParams.get("type")).toBe("product")
+    expect(parsed.searchParams.has("cursor")).toBe(false)
+  })
+
+  it("sends the body as-is with Content-Type application/json", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({ ok: true, status: 201, body: { id: "1" } }))
+    const transport = createHttpTransport({ baseUrl: "http://api.example.com", fetchImpl })
+    const raw = '{"type":"product"}'
+    await transport.rawRequest({ method: "POST", path: "/entities", body: raw })
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    expect((init as RequestInit).body).toBe(raw)
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers["Content-Type"]).toBe("application/json")
   })
 })
 

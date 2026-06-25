@@ -11,11 +11,42 @@ export interface FabriqTransport {
     signal?: AbortSignal
   }): Promise<T>
 
+  /**
+   * Low-level request that returns FULL response metadata (status, headers,
+   * body) and does NOT throw on non-2xx — intended for a debugging console
+   * that needs to inspect error responses. Goes through the same base URL and
+   * dynamic (tenant) headers as `request`.
+   */
+  rawRequest(opts: RawRequestOptions): Promise<RawResponse>
+
   stream(opts: {
     path: string
     body?: unknown
     signal?: AbortSignal
   }): AsyncIterable<unknown>
+}
+
+/** Options for a raw, inspectable HTTP request. */
+export interface RawRequestOptions {
+  method: string
+  /** Path (prefixed with base) or an absolute URL (passed through). */
+  path: string
+  query?: Record<string, string | undefined>
+  /** Pre-serialized request body sent as-is (string). */
+  body?: string
+  signal?: AbortSignal
+}
+
+/** Full response metadata captured by `rawRequest`. */
+export interface RawResponse {
+  status: number
+  ok: boolean
+  statusText: string
+  headers: Record<string, string>
+  durationMs: number
+  bodyText: string
+  /** Parsed body when it is valid JSON; undefined otherwise. */
+  json?: unknown
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +136,15 @@ export class FabriqClient {
     // Trim trailing slash for clean path joining.
     this.baseUrl = baseUrl.replace(/\/$/, "")
     this.transport = transport
+  }
+
+  /**
+   * Low-level inspectable request — returns full response metadata and does
+   * NOT throw on non-2xx. Reuses the transport (and thus the base URL + tenant
+   * headers). Powers the Raw API console.
+   */
+  rawRequest(opts: RawRequestOptions): Promise<RawResponse> {
+    return this.transport.rawRequest(opts)
   }
 
   /** GET /meta */
