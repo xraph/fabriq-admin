@@ -119,6 +119,16 @@ export interface PluginRecord {
 /** PluginRecord without the server-assigned id — used for creation. */
 export type NewPluginRecord = Omit<PluginRecord, "id">
 
+/**
+ * Capability flags reported by the backend — which fabriq subsystems are
+ * available for an instance, or which a given entity type participates in.
+ *
+ * Known keys: relational, graph, vector, spatial, search, crdt, files.
+ * Kept as a `Record<string, boolean>` (rather than a closed shape) for
+ * forward-compat with capabilities the backend may add later.
+ */
+export type CapabilityFlags = Record<string, boolean>
+
 // ---------------------------------------------------------------------------
 // FabriqClient
 // ---------------------------------------------------------------------------
@@ -235,6 +245,36 @@ export class FabriqClient {
       path: `${this.baseUrl}/schema`,
       query: { type },
     })
+  }
+
+  /**
+   * GET /capabilities — which fabriq subsystems this instance has.
+   * Returns the `.capabilities` map (relational/graph/vector/...).
+   */
+  async getInstanceCapabilities(): Promise<CapabilityFlags> {
+    const res = await this.transport.request<{ capabilities?: CapabilityFlags }>({
+      method: "GET",
+      path: `${this.baseUrl}/capabilities`,
+    })
+    return res?.capabilities ?? {}
+  }
+
+  /**
+   * GET /capabilities?type=<T> — which subsystems a given entity type
+   * participates in. Returns `{ type, capabilities }`.
+   */
+  async getEntityCapabilities(
+    type: string,
+  ): Promise<{ type: string; capabilities: CapabilityFlags }> {
+    const res = await this.transport.request<{
+      type?: string
+      capabilities?: CapabilityFlags
+    }>({
+      method: "GET",
+      path: `${this.baseUrl}/capabilities`,
+      query: { type },
+    })
+    return { type: res?.type ?? type, capabilities: res?.capabilities ?? {} }
   }
 
   /** GET /plugins — list all registered remote plugins */

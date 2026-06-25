@@ -4,6 +4,7 @@ import {
   usePluginHost,
   useTenantContext,
   useTenant,
+  CapabilityBadges,
 } from "@fabriq/admin-sdk"
 import {
   Card,
@@ -17,7 +18,7 @@ import {
   Alert,
   AlertDescription,
 } from "@fabriq/ui"
-import { Activity, Database, Plug, Building2, ArrowRight } from "lucide-react"
+import { Activity, Database, Plug, Building2, ArrowRight, Layers } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // ConnectionCard
@@ -85,6 +86,45 @@ function ConnectionCard() {
               </div>
             )}
           </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// EngineCapabilitiesCard
+// ---------------------------------------------------------------------------
+
+function EngineCapabilitiesCard() {
+  const { data, isLoading, error } = useFabriqQuery(
+    ["capabilities"],
+    (c) => c.getInstanceCapabilities(),
+    { retry: false },
+  )
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Layers className="h-4 w-4" aria-hidden="true" />
+          Engine capabilities
+        </CardTitle>
+        <CardDescription>Fabriq subsystems this instance provides.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading && (
+          <div className="flex flex-wrap gap-1">
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="h-5 w-20" />
+          </div>
+        )}
+        {error && !isLoading && (
+          <p className="text-sm text-muted-foreground">Capabilities unavailable.</p>
+        )}
+        {data && !isLoading && (
+          <CapabilityBadges capabilities={data} showInactive />
         )}
       </CardContent>
     </Card>
@@ -289,6 +329,7 @@ export function OverviewPage() {
       {/* Dashboard grid */}
       <div className="grid gap-4 md:grid-cols-2">
         <ConnectionCard />
+        <EngineCapabilitiesCard />
         <TenantCard />
         <PluginsCard />
         <QuickLinksCard />

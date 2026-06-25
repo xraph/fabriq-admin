@@ -203,6 +203,61 @@ describe("FabriqClient", () => {
     expect(transport.lastRequest?.query).toEqual({ type: "product" })
   })
 
+  it("getInstanceCapabilities — GETs /capabilities and unwraps .capabilities", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({
+      capabilities: { relational: true, vector: false, search: true },
+    })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.getInstanceCapabilities()
+
+    expect(result).toEqual({ relational: true, vector: false, search: true })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/capabilities")
+    expect(transport.lastRequest?.query).toBeUndefined()
+  })
+
+  it("getInstanceCapabilities — returns {} when capabilities absent", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({})
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.getInstanceCapabilities()
+
+    expect(result).toEqual({})
+  })
+
+  it("getEntityCapabilities — GETs /capabilities with ?type= and returns {type,capabilities}", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({
+      type: "product",
+      capabilities: { relational: true, vector: true },
+    })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.getEntityCapabilities("product")
+
+    expect(result).toEqual({
+      type: "product",
+      capabilities: { relational: true, vector: true },
+    })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/capabilities")
+    expect(transport.lastRequest?.query).toEqual({ type: "product" })
+  })
+
+  it("getEntityCapabilities — falls back to the requested type + {} caps", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({})
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.getEntityCapabilities("order")
+
+    expect(result).toEqual({ type: "order", capabilities: {} })
+    expect(transport.lastRequest?.query).toEqual({ type: "order" })
+  })
+
   it("watch — calls stream with /watch path and yields events", async () => {
     const transport = new FakeTransport()
     const events = [{ type: "delta", id: "1" }, { type: "delta", id: "2" }]

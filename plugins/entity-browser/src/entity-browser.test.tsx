@@ -369,6 +369,39 @@ describe("EntityDetail", () => {
     expect(typeBadges.length).toBeGreaterThanOrEqual(1)
   })
 
+  it("shows per-type capability badges from getEntityCapabilities", async () => {
+    const capTransport: FabriqTransport = {
+      async request<T>(reqOpts: { path: string; query?: Record<string, string | number | undefined> }): Promise<T> {
+        const { path } = reqOpts
+        if (path.endsWith("/capabilities")) {
+          return {
+            type: "node",
+            capabilities: { relational: true, vector: true },
+          } as unknown as T
+        }
+        if (path.endsWith("/entities/types")) {
+          return { types: ["node"] } as unknown as T
+        }
+        if (path.match(/\/entities\/(.+)$/)) {
+          return ENTITY_A as unknown as T
+        }
+        return {} as T
+      },
+      async *stream(): AsyncIterable<unknown> {},
+    }
+    const client = new FabriqClient({ baseUrl: "http://test", transport: capTransport })
+    render(
+      <FabriqAdmin
+        client={client}
+        plugins={[entityBrowserPlugin]}
+        initialPath="entities/node/ent-1"
+      />,
+    )
+    await screen.findByText(/42/)
+    await screen.findByText("Relational")
+    await screen.findByText("Vector")
+  })
+
   it("Copy ID button is present and clicking it does not crash", async () => {
     const clip = stubClipboard()
     try {

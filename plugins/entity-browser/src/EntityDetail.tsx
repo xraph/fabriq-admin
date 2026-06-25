@@ -4,6 +4,7 @@ import {
   useFabriqClient,
   useQueryClient,
   usePluginHost,
+  CapabilityBadges,
 } from "@fabriq/admin-sdk"
 import {
   Button,
@@ -120,6 +121,14 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
     { enabled: Boolean(id) && Boolean(type) },
   )
 
+  // Per-type capabilities — which subsystems THIS entity type participates in.
+  // Enhancement only: degrade quietly if the backend doesn't support it.
+  const { data: caps } = useFabriqQuery(
+    ["entity-caps", type],
+    (client) => client.getEntityCapabilities(type),
+    { enabled: Boolean(type), retry: false },
+  )
+
   async function handleEdit(nextData: Record<string, unknown>) {
     setSaving(true)
     try {
@@ -196,6 +205,9 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
               <div className="flex items-center gap-3 flex-wrap">
                 <CardTitle className="font-mono text-lg">{data.id}</CardTitle>
                 <Badge variant="secondary">{data.type}</Badge>
+                {caps?.capabilities && (
+                  <CapabilityBadges capabilities={caps.capabilities} />
+                )}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <Button variant="ghost" size="sm" onClick={() => navigate("entities")} aria-label="Back">

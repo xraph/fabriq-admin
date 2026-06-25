@@ -132,6 +132,66 @@ describe("Overview — API connection card (meta success)", () => {
 })
 
 // ---------------------------------------------------------------------------
+// 3b. Engine capabilities card — renders badges from getInstanceCapabilities
+// ---------------------------------------------------------------------------
+
+describe("Overview — engine capabilities card", () => {
+  it("renders capability badges from getInstanceCapabilities", async () => {
+    const client = makeFakeClient({
+      async request<T>(reqOpts: { path: string }): Promise<T> {
+        if (reqOpts.path.endsWith("/capabilities")) {
+          return {
+            capabilities: { relational: true, vector: true, graph: false },
+          } as unknown as T
+        }
+        return {} as T
+      },
+    })
+
+    render(
+      <FabriqAdmin
+        client={client}
+        plugins={[overviewPlugin]}
+        loadRemote={vi.fn()}
+        initialPath=""
+      />,
+    )
+
+    expect(screen.getByText("Engine capabilities")).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText("Relational")).toBeTruthy()
+    })
+    expect(screen.getByText("Vector")).toBeTruthy()
+    // showInactive — Graph (false) is still rendered, muted
+    expect(screen.getByText("Graph")).toBeTruthy()
+  })
+
+  it("shows 'Capabilities unavailable.' when getInstanceCapabilities rejects", async () => {
+    const client = makeFakeClient({
+      async request<T>(reqOpts: { path: string }): Promise<T> {
+        if (reqOpts.path.endsWith("/capabilities")) {
+          throw new Error("ECONNREFUSED")
+        }
+        return {} as T
+      },
+    })
+
+    render(
+      <FabriqAdmin
+        client={client}
+        plugins={[overviewPlugin]}
+        loadRemote={vi.fn()}
+        initialPath=""
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/capabilities unavailable/i)).toBeTruthy()
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
 // 4. Meta error — "cannot reach" alert renders, app does not crash
 // ---------------------------------------------------------------------------
 

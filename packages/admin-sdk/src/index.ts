@@ -1,6 +1,8 @@
 export const SDK_VERSION = "0.0.0"
 export * from "./plugin"
 export * from "./client"
+export { CapabilityBadges } from "./CapabilityBadges"
+export type { CapabilityBadgesProps } from "./CapabilityBadges"
 export * from "./provider"
 export * from "./router"
 export * from "./registry"
