@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect } from "react"
 import {
   useFabriqQuery,
   useFabriqClient,
@@ -41,8 +41,6 @@ export function EntityList() {
   const [cursor, setCursor] = useState<string | undefined>(undefined)
   // Accumulated items per type — keyed by type string
   const [accumulated, setAccumulated] = useState<Record<string, EntityRecord[]>>({})
-  // Track which (type, cursor) combinations we have already appended to prevent double-append
-  const appendedRef = useRef<Set<string>>(new Set())
   const { navigate } = usePluginHost()
   const client = useFabriqClient()
   const queryClient = useQueryClient()
@@ -58,10 +56,9 @@ export function EntityList() {
     (c) => c.listEntityTypes(),
   )
 
-  // Reset accumulation for the active type and refetch its first page.
+  // Reset to the first page and refetch it. The page-0 effect below replaces
+  // the accumulated list with the fresh first page, so mutations show up.
   async function refreshList() {
-    appendedRef.current = new Set()
-    setAccumulated((prev) => ({ ...prev, [trimmedType]: [] }))
     setCursor(undefined)
     await queryClient.invalidateQueries({ queryKey: ["entities", trimmedType] })
   }
@@ -80,7 +77,6 @@ export function EntityList() {
   // Reset cursor and accumulation whenever type changes
   useEffect(() => {
     setCursor(undefined)
-    appendedRef.current = new Set()
     setAccumulated({})
   }, [trimmedType])
 
@@ -95,14 +91,16 @@ export function EntityList() {
     { enabled: trimmedType.length > 0 },
   )
 
-  // Append newly arrived page to accumulated list; dedupe by id; guard double-append
+  // Fold the arrived page into the accumulated list:
+  //  - first page (empty cursor): REPLACE — so refetches after a create/edit/delete
+  //    repopulate correctly instead of being deduped away.
+  //  - subsequent pages (Load more): APPEND, deduped by id.
   useEffect(() => {
     if (!data || !trimmedType) return
-    const pageKey = `${trimmedType}::${cursor ?? ""}`
-    if (appendedRef.current.has(pageKey)) return
-    appendedRef.current.add(pageKey)
-
     setAccumulated((prev) => {
+      if (!cursor) {
+        return { ...prev, [trimmedType]: data.items }
+      }
       const existing = prev[trimmedType] ?? []
       const existingIds = new Set(existing.map((e) => e.id))
       const newItems = data.items.filter((e) => !existingIds.has(e.id))
