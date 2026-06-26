@@ -562,4 +562,68 @@ describe("FabriqClient", () => {
     const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
     await expect(client.listFiles()).rejects.toMatchObject({ status: 501 })
   })
+
+  // -------------------------------------------------------------------------
+  // CRDT plane
+  // -------------------------------------------------------------------------
+
+  it("getCrdtDocument — calls GET /crdt/:docId and returns the merged state", async () => {
+    const transport = new FakeTransport()
+    const doc = { docId: "welcome", version: 3, snapshot: { title: "Hi", body: "x" } }
+    transport.setRequestResponse(doc)
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    const result = await client.getCrdtDocument("welcome")
+    expect(result).toEqual(doc)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/crdt/welcome")
+  })
+
+  it("getCrdtDocument — preserves a slash in the docId (page/welcome → /crdt/page/welcome)", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ docId: "page/welcome", version: 1, snapshot: {} })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await client.getCrdtDocument("page/welcome")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/crdt/page/welcome")
+    // The slash MUST NOT be percent-encoded.
+    expect(transport.lastRequest?.path).not.toContain("%2F")
+  })
+
+  it("getCrdtUpdates — calls GET /crdt/:docId/updates with a limit query", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({
+      items: [{ index: 0, size: 12, preview: "abc" }],
+      highWaterSeq: 2,
+    })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    const result = await client.getCrdtUpdates("page/welcome", 50)
+    expect(result.highWaterSeq).toBe(2)
+    expect(result.items).toHaveLength(1)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe(
+      "http://localhost:9000/crdt/page/welcome/updates",
+    )
+    expect(transport.lastRequest?.query).toMatchObject({ limit: 50 })
+  })
+
+  it("getCrdtUpdates — omits the limit query when not provided", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ items: [], highWaterSeq: 0 })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await client.getCrdtUpdates("welcome")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/crdt/welcome/updates")
+    expect(transport.lastRequest?.query).toBeUndefined()
+  })
+
+  it("getCrdtDocument — surfaces a 501 (plane not configured) as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(
+      new HttpTransportError(501, '{"error":"document/CRDT plane not configured"}'),
+    )
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await expect(client.getCrdtDocument("welcome")).rejects.toMatchObject({ status: 501 })
+  })
 })

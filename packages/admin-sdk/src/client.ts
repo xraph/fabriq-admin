@@ -223,6 +223,35 @@ export interface GraphQueryResult {
 }
 
 // ---------------------------------------------------------------------------
+// CRDT / collaborative-document types
+// ---------------------------------------------------------------------------
+
+/**
+ * A collaborative document's merged (current) state. `snapshot` is the merged
+ * JSON value produced by replaying the CRDT update log (e.g. `{title, body}`);
+ * its shape is document-specific, so it is left as `unknown`.
+ */
+export interface CrdtDocument {
+  docId: string
+  version: number
+  snapshot: unknown
+}
+
+/** Metadata for a single update in a document's CRDT update log. */
+export interface CrdtUpdate {
+  index: number
+  size: number
+  /** Base64-encoded preview of the update payload. */
+  preview?: string
+}
+
+/** A page of CRDT update-log metadata plus the high-water sequence. */
+export interface CrdtUpdates {
+  items: CrdtUpdate[]
+  highWaterSeq: number
+}
+
+// ---------------------------------------------------------------------------
 // FabriqClient
 // ---------------------------------------------------------------------------
 
@@ -550,6 +579,42 @@ export class FabriqClient {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // CRDT / collaborative-document plane
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /crdt/:docId — the merged (current) state of a collaborative document.
+   *
+   * `docId` may contain slashes (e.g. `page/welcome`); the backend route
+   * handles multi-segment ids, so the slash is preserved in the path. Each
+   * segment is percent-encoded individually and the segments are re-joined with
+   * "/", so `page/welcome` produces `/crdt/page/welcome` (not `/crdt/page%2Fwelcome`).
+   *
+   * An unconfigured document/CRDT plane surfaces as a thrown HttpTransportError
+   * with status 501; an empty document returns `{}` (version 0).
+   */
+  getCrdtDocument(docId: string): Promise<CrdtDocument> {
+    return this.transport.request<CrdtDocument>({
+      method: "GET",
+      path: `${this.baseUrl}/crdt/${encodeDocId(docId)}`,
+    })
+  }
+
+  /**
+   * GET /crdt/:docId/updates?limit= — metadata for the document's update log.
+   * Returns `{items, highWaterSeq}`. Slash-in-docId is preserved (see
+   * getCrdtDocument). A 501 surfaces as a thrown HttpTransportError.
+   */
+  getCrdtUpdates(docId: string, limit?: number): Promise<CrdtUpdates> {
+    const query = limit !== undefined ? { limit } : undefined
+    return this.transport.request<CrdtUpdates>({
+      method: "GET",
+      path: `${this.baseUrl}/crdt/${encodeDocId(docId)}/updates`,
+      ...(query ? { query } : {}),
+    })
+  }
+
   /** GET /plugins — list all registered remote plugins */
   listPlugins(): Promise<{ items: PluginRecord[] }> {
     return this.transport.request({
@@ -590,6 +655,16 @@ export class FabriqClient {
       body: scope,
     })
   }
+}
+
+/**
+ * Encodes a (possibly multi-segment) CRDT docId for use in a URL path. Each
+ * "/"-separated segment is percent-encoded individually, then the segments are
+ * re-joined with "/", so a slash inside the docId is preserved as a real path
+ * separator (`page/welcome` → `page/welcome`) rather than `%2F`.
+ */
+function encodeDocId(docId: string): string {
+  return docId.split("/").map(encodeURIComponent).join("/")
 }
 
 /**

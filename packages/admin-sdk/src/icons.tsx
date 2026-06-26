@@ -8,6 +8,7 @@ import {
   Settings,
   Terminal,
   FolderTree,
+  FileText,
   type LucideIcon,
 } from "lucide-react"
 
@@ -33,6 +34,9 @@ export function resolveIcon(name?: string): LucideIcon {
       return Terminal
     case "files":
       return FolderTree
+    case "file":
+    case "document":
+      return FileText
     default:
       return Circle
   }

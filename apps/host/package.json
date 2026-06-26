@@ -12,6 +12,7 @@
   "dependencies": {
     "@fabriq/admin-sdk": "workspace:*",
     "@fabriq/plugin-api-console": "workspace:*",
+    "@fabriq/plugin-crdt": "workspace:*",
     "@fabriq/plugin-entity-browser": "workspace:*",
     "@fabriq/plugin-files": "workspace:*",
     "@fabriq/plugin-graph": "workspace:*",
