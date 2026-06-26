@@ -41,6 +41,9 @@ importers:
       '@fabriq/plugin-plugins-manager':
         specifier: workspace:*
         version: link:../../plugins/plugins-manager
+      '@fabriq/plugin-search':
+        specifier: workspace:*
+        version: link:../../plugins/search
       '@fabriq/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -245,6 +248,28 @@ importers:
         version: 19.2.7(react@19.2.7)
 
   plugins/plugins-manager:
+    dependencies:
+      '@fabriq/admin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/admin-sdk
+      '@fabriq/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      lucide-react:
+        specifier: ^0.456.0
+        version: 0.456.0(react@19.2.7)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.7(react@19.2.7)
+
+  plugins/search:
     dependencies:
       '@fabriq/admin-sdk':
         specifier: workspace:*

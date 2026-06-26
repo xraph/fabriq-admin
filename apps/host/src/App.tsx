@@ -10,6 +10,7 @@ import {
 } from "@fabriq/admin-sdk"
 import { overviewPlugin } from "@fabriq/plugin-overview"
 import { entityBrowserPlugin } from "@fabriq/plugin-entity-browser"
+import { searchPlugin } from "@fabriq/plugin-search"
 import { pluginsManagerPlugin } from "@fabriq/plugin-plugins-manager"
 import { apiConsolePlugin } from "@fabriq/plugin-api-console"
 import {
@@ -53,7 +54,13 @@ const store = compositePluginStore({
 })
 
 // Builtin plugins — always mounted. Overview is first (order 0 / index route "").
-const plugins = [overviewPlugin, entityBrowserPlugin, pluginsManagerPlugin, apiConsolePlugin]
+const plugins = [
+  overviewPlugin,
+  entityBrowserPlugin,
+  searchPlugin,
+  pluginsManagerPlugin,
+  apiConsolePlugin,
+]
 
 export function App() {
   return (

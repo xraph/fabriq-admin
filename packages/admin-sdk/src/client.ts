@@ -72,6 +72,22 @@ export interface EntityPage {
   nextCursor?: string
 }
 
+/**
+ * A single full-text search result. Structurally an EntityRecord ({id,type,data}),
+ * aliased for intent at call sites.
+ */
+export type SearchResultItem = EntityRecord
+
+/**
+ * A single vector/semantic search match: an entity id, a relevance score, and
+ * (optionally) the entity data when the backend chose to inline it.
+ */
+export interface VectorMatch {
+  id: string
+  score: number
+  data?: Record<string, unknown>
+}
+
 export interface WatchScope {
   tenant?: string
   type?: string
@@ -275,6 +291,50 @@ export class FabriqClient {
       query: { type },
     })
     return { type: res?.type ?? type, capabilities: res?.capabilities ?? {} }
+  }
+
+  /**
+   * GET /search?type=&q=&limit= — full-text search over an entity type.
+   *
+   * Surfaces backend failures as a thrown HttpTransportError so callers can
+   * inspect `.status` (e.g. 501 "search not configured", 400 missing type/q).
+   */
+  searchText(params: {
+    type: string
+    q: string
+    limit?: number
+  }): Promise<{ items: EntityRecord[] }> {
+    const query: Record<string, string | number | undefined> = {
+      type: params.type,
+      q: params.q,
+    }
+    if (params.limit !== undefined) query.limit = params.limit
+    return this.transport.request<{ items: EntityRecord[] }>({
+      method: "GET",
+      path: `${this.baseUrl}/search`,
+      query,
+    })
+  }
+
+  /**
+   * POST /search/vector — vector/semantic search.
+   *
+   * Pass `{type, query, k}` for a TEXT query (requires a server-side embedder),
+   * or `{type, id, k}` for similar-to-entity. Surfaces backend failures as a
+   * thrown HttpTransportError (e.g. 501 "vector not configured", 501 "no
+   * embedder configured for text query", 400 missing type / neither query nor id).
+   */
+  searchVector(body: {
+    type: string
+    query?: string
+    id?: string
+    k?: number
+  }): Promise<{ matches: VectorMatch[] }> {
+    return this.transport.request<{ matches: VectorMatch[] }>({
+      method: "POST",
+      path: `${this.baseUrl}/search/vector`,
+      body,
+    })
   }
 
   /** GET /plugins — list all registered remote plugins */

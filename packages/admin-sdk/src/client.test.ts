@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { FabriqClient } from "./client"
+import { HttpTransportError } from "./httpTransport"
 import type { FabriqTransport } from "./client"
 
 // ---------------------------------------------------------------------------
@@ -11,10 +12,15 @@ class FakeTransport implements FabriqTransport {
   lastStream: Parameters<FabriqTransport["stream"]>[0] | null = null
 
   private _requestResponse: unknown = {}
+  private _requestError: unknown = null
   private _streamEvents: unknown[] = []
 
   setRequestResponse(v: unknown) {
     this._requestResponse = v
+  }
+
+  setRequestError(err: unknown) {
+    this._requestError = err
   }
 
   setStreamEvents(events: unknown[]) {
@@ -23,7 +29,12 @@ class FakeTransport implements FabriqTransport {
 
   async request<T>(opts: Parameters<FabriqTransport["request"]>[0]): Promise<T> {
     this.lastRequest = opts
+    if (this._requestError) throw this._requestError
     return this._requestResponse as T
+  }
+
+  async rawRequest(): Promise<never> {
+    throw new Error("rawRequest not used in these tests")
   }
 
   async *stream(opts: Parameters<FabriqTransport["stream"]>[0]): AsyncIterable<unknown> {
@@ -256,6 +267,71 @@ describe("FabriqClient", () => {
 
     expect(result).toEqual({ type: "order", capabilities: {} })
     expect(transport.lastRequest?.query).toEqual({ type: "order" })
+  })
+
+  it("searchText — GET /search with type/q/limit query", async () => {
+    const transport = new FakeTransport()
+    const items = [{ id: "p1", type: "product", data: { name: "Widget" } }]
+    transport.setRequestResponse({ items })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.searchText({ type: "product", q: "wid", limit: 5 })
+
+    expect(result).toEqual({ items })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/search")
+    expect(transport.lastRequest?.query).toEqual({ type: "product", q: "wid", limit: 5 })
+  })
+
+  it("searchText — omits limit from query when not provided", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ items: [] })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.searchText({ type: "product", q: "x" })
+
+    expect(transport.lastRequest?.query).toEqual({ type: "product", q: "x" })
+  })
+
+  it("searchVector — POST /search/vector forwards the body (text query)", async () => {
+    const transport = new FakeTransport()
+    const matches = [{ id: "p1", score: 0.92, data: { name: "Widget" } }]
+    transport.setRequestResponse({ matches })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.searchVector({ type: "product", query: "blue widget", k: 10 })
+
+    expect(result).toEqual({ matches })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/search/vector")
+    expect(transport.lastRequest?.body).toEqual({
+      type: "product",
+      query: "blue widget",
+      k: 10,
+    })
+  })
+
+  it("searchVector — POST /search/vector forwards the body (similar-to-entity)", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ matches: [] })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.searchVector({ type: "product", id: "p1", k: 3 })
+
+    expect(transport.lastRequest?.body).toEqual({ type: "product", id: "p1", k: 3 })
+  })
+
+  it("searchVector — surfaces a 501 as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(
+      new HttpTransportError(501, '{"error":"vector not configured"}'),
+    )
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await expect(
+      client.searchVector({ type: "product", query: "x" }),
+    ).rejects.toMatchObject({ status: 501 })
   })
 
   it("watch — calls stream with /watch path and yields events", async () => {
