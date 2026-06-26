@@ -12,6 +12,7 @@ import { overviewPlugin } from "@fabriq/plugin-overview"
 import { entityBrowserPlugin } from "@fabriq/plugin-entity-browser"
 import { searchPlugin } from "@fabriq/plugin-search"
 import { graphPlugin } from "@fabriq/plugin-graph"
+import { filesPlugin } from "@fabriq/plugin-files"
 import { pluginsManagerPlugin } from "@fabriq/plugin-plugins-manager"
 import { apiConsolePlugin } from "@fabriq/plugin-api-console"
 import {
@@ -60,6 +61,7 @@ const plugins = [
   entityBrowserPlugin,
   searchPlugin,
   graphPlugin,
+  filesPlugin,
   pluginsManagerPlugin,
   apiConsolePlugin,
 ]

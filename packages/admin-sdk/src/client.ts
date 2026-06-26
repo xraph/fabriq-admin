@@ -24,6 +24,26 @@ export interface FabriqTransport {
     body?: unknown
     signal?: AbortSignal
   }): AsyncIterable<unknown>
+
+  /**
+   * Binary fetch — returns the raw response body as a Blob plus its headers.
+   *
+   * Unlike `request`, this does NOT force a JSON Content-Type and does NOT
+   * parse the body as JSON, so it is suitable for downloading file content.
+   * It still goes through the same base URL and dynamic (tenant) headers, and
+   * throws an HttpTransportError on a non-2xx response.
+   */
+  fetchBlob(opts: {
+    path: string
+    signal?: AbortSignal
+  }): Promise<FetchBlobResult>
+}
+
+/** Result of a binary `fetchBlob` call: the body bytes + response headers. */
+export interface FetchBlobResult {
+  blob: Blob
+  headers: Record<string, string>
+  status: number
 }
 
 /** Options for a raw, inspectable HTTP request. */
@@ -144,6 +164,31 @@ export type NewPluginRecord = Omit<PluginRecord, "id">
  * forward-compat with capabilities the backend may add later.
  */
 export type CapabilityFlags = Record<string, boolean>
+
+// ---------------------------------------------------------------------------
+// File plane types
+// ---------------------------------------------------------------------------
+
+/**
+ * A node in the file tree — either a folder or a file. Folders have no size /
+ * contentType; files carry both. `parentId` is absent for root-level nodes.
+ */
+export interface FileNode {
+  id: string
+  name: string
+  kind: "folder" | "file"
+  size?: number
+  contentType?: string
+  parentId?: string
+  updatedAt?: string
+}
+
+/** Result of a binary file download: the bytes, a filename, and content type. */
+export interface FileDownload {
+  blob: Blob
+  filename: string
+  contentType: string
+}
 
 // ---------------------------------------------------------------------------
 // Graph types
@@ -426,6 +471,85 @@ export class FabriqClient {
     })
   }
 
+  // -------------------------------------------------------------------------
+  // File plane
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /files?parent=&limit=&offset= — list the children of a folder.
+   * An empty/absent `parent` lists the root. Returns the `.items` array.
+   * Surfaces a 501 (file storage not configured) as a thrown HttpTransportError.
+   */
+  async listFiles(params?: {
+    parent?: string
+    limit?: number
+    offset?: number
+  }): Promise<FileNode[]> {
+    const query: Record<string, string | number | undefined> = {}
+    if (params?.parent !== undefined) query.parent = params.parent
+    if (params?.limit !== undefined) query.limit = params.limit
+    if (params?.offset !== undefined) query.offset = params.offset
+    const res = await this.transport.request<{ items?: FileNode[] }>({
+      method: "GET",
+      path: `${this.baseUrl}/files`,
+      ...(Object.keys(query).length > 0 ? { query } : {}),
+    })
+    return res?.items ?? []
+  }
+
+  /** POST /files/folder — create a folder; body `{parentId?, name}` → fileNode. */
+  createFolder(body: { parentId?: string; name: string }): Promise<FileNode> {
+    return this.transport.request<FileNode>({
+      method: "POST",
+      path: `${this.baseUrl}/files/folder`,
+      body,
+    })
+  }
+
+  /**
+   * POST /files — upload a file; body `{parentId?, name, contentType?, dataBase64}`
+   * → created fileNode. Bytes are carried as base64 in JSON (reuses request()).
+   */
+  uploadFile(body: {
+    parentId?: string
+    name: string
+    contentType?: string
+    dataBase64: string
+  }): Promise<FileNode> {
+    return this.transport.request<FileNode>({
+      method: "POST",
+      path: `${this.baseUrl}/files`,
+      body,
+    })
+  }
+
+  /** DELETE /files/:id — remove a file or folder by id. */
+  deleteFile(id: string): Promise<void> {
+    return this.transport.request<void>({
+      method: "DELETE",
+      path: `${this.baseUrl}/files/${encodeURIComponent(id)}`,
+    })
+  }
+
+  /**
+   * GET /files/:id/content — download raw file bytes (BINARY).
+   *
+   * Goes through the transport's `fetchBlob` (no forced JSON Content-Type, no
+   * JSON parsing) so the response is returned as a Blob. The filename is parsed
+   * from the Content-Disposition header (falling back to the id).
+   */
+  async downloadFile(id: string): Promise<FileDownload> {
+    const { blob, headers } = await this.transport.fetchBlob({
+      path: `${this.baseUrl}/files/${encodeURIComponent(id)}/content`,
+    })
+    const disposition = headers["content-disposition"]
+    return {
+      blob,
+      filename: parseContentDispositionFilename(disposition) ?? id,
+      contentType: headers["content-type"] ?? "application/octet-stream",
+    }
+  }
+
   /** GET /plugins — list all registered remote plugins */
   listPlugins(): Promise<{ items: PluginRecord[] }> {
     return this.transport.request({
@@ -466,4 +590,25 @@ export class FabriqClient {
       body: scope,
     })
   }
+}
+
+/**
+ * Extracts a filename from a Content-Disposition header value, supporting both
+ * the RFC 5987 `filename*=` form and the plain quoted/unquoted `filename=` form.
+ * Returns undefined when no filename can be found.
+ */
+function parseContentDispositionFilename(value?: string): string | undefined {
+  if (!value) return undefined
+  // Prefer RFC 5987 filename*=UTF-8''<encoded>
+  const star = /filename\*=(?:UTF-8'')?([^;]+)/i.exec(value)
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1].trim().replace(/^"|"$/g, ""))
+    } catch {
+      // fall through to plain filename
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(value)
+  if (plain?.[1]) return plain[1].trim()
+  return undefined
 }

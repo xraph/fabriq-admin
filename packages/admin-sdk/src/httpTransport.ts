@@ -1,4 +1,9 @@
-import type { FabriqTransport, RawRequestOptions, RawResponse } from "./client"
+import type {
+  FabriqTransport,
+  FetchBlobResult,
+  RawRequestOptions,
+  RawResponse,
+} from "./client"
 
 /** Monotonic time source, guarded for SSR (no `performance` global). */
 function now(): number {
@@ -159,6 +164,49 @@ export function createHttpTransport({
   }
 
   // -------------------------------------------------------------------------
+  // fetchBlob — binary download; no forced JSON, returns a Blob + headers
+  // -------------------------------------------------------------------------
+
+  async function fetchBlob(opts: {
+    path: string
+    signal?: AbortSignal
+  }): Promise<FetchBlobResult> {
+    let url = opts.path
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = base + url
+    }
+
+    const dynamicHeaders = getHeaders ? getHeaders() : {}
+    const res = await _fetch(url, {
+      method: "GET",
+      // Merge static + dynamic (tenant) headers — NO Content-Type forced.
+      headers: { ...defaultHeaders, ...dynamicHeaders },
+      signal: opts.signal,
+    })
+
+    if (!res.ok) {
+      let text = ""
+      try {
+        text = await res.text()
+      } catch {
+        // ignore — surface the status regardless
+      }
+      throw new HttpTransportError(res.status, text)
+    }
+
+    const headers: Record<string, string> = {}
+    if (res.headers && typeof res.headers.forEach === "function") {
+      res.headers.forEach((value, key) => {
+        // Normalize header names to lowercase for predictable lookup.
+        headers[key.toLowerCase()] = value
+      })
+    }
+
+    const blob = await res.blob()
+    return { blob, headers, status: res.status }
+  }
+
+  // -------------------------------------------------------------------------
   // stream — SSE via POST
   // -------------------------------------------------------------------------
 
@@ -239,7 +287,7 @@ export function createHttpTransport({
     }
   }
 
-  return { request, rawRequest, stream }
+  return { request, rawRequest, stream, fetchBlob }
 }
 
 // ---------------------------------------------------------------------------

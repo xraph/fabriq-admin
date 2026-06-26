@@ -48,6 +48,29 @@ function makeStreamResponse(chunks: string[]): Response {
   } as unknown as Response
 }
 
+/** Build a Response whose body is exposed via blob() + headers. */
+function makeBlobResponse(opts: {
+  ok: boolean
+  status: number
+  blob?: Blob
+  headers?: Record<string, string>
+  text?: string
+}): Response {
+  const headerEntries = Object.entries(opts.headers ?? {})
+  return {
+    ok: opts.ok,
+    status: opts.status,
+    statusText: "",
+    headers: {
+      forEach: (cb: (value: string, key: string) => void) => {
+        for (const [k, v] of headerEntries) cb(v, k)
+      },
+    },
+    blob: async () => opts.blob ?? new Blob([]),
+    text: async () => opts.text ?? "",
+  } as unknown as Response
+}
+
 // ---------------------------------------------------------------------------
 // request()
 // ---------------------------------------------------------------------------
@@ -363,5 +386,64 @@ describe("createHttpTransport – stream", () => {
     // Accept and Content-Type must still be set
     expect(headers["Accept"]).toBe("text/event-stream")
     expect(headers["Content-Type"]).toBe("application/json")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// fetchBlob()
+// ---------------------------------------------------------------------------
+
+describe("createHttpTransport – fetchBlob", () => {
+  it("returns the blob + lowercased headers + status on success", async () => {
+    const blob = new Blob(["hello"], { type: "text/plain" })
+    const fetchImpl = vi.fn().mockResolvedValue(
+      makeBlobResponse({
+        ok: true,
+        status: 200,
+        blob,
+        headers: {
+          "Content-Type": "text/plain",
+          "Content-Disposition": 'attachment; filename="a.txt"',
+        },
+      }),
+    )
+    const transport = createHttpTransport({ baseUrl: "http://api.example.com", fetchImpl })
+    const res = await transport.fetchBlob({ path: "/files/x/content" })
+
+    expect(res.status).toBe(200)
+    expect(res.blob).toBe(blob)
+    expect(res.headers["content-type"]).toBe("text/plain")
+    expect(res.headers["content-disposition"]).toBe('attachment; filename="a.txt"')
+
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("http://api.example.com/files/x/content")
+    // No Content-Type forced on the request
+    const reqHeaders = (init.headers as Record<string, string>) ?? {}
+    expect(reqHeaders["Content-Type"]).toBeUndefined()
+  })
+
+  it("includes getHeaders() (tenant) in the request headers", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(makeBlobResponse({ ok: true, status: 200 }))
+    const transport = createHttpTransport({
+      baseUrl: "http://api.example.com",
+      getHeaders: () => ({ "X-Tenant-ID": "acme" }),
+      fetchImpl,
+    })
+    await transport.fetchBlob({ path: "/files/x/content" })
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    const headers = (init.headers as Record<string, string>) ?? {}
+    expect(headers["X-Tenant-ID"]).toBe("acme")
+  })
+
+  it("throws HttpTransportError on a non-ok response", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(makeBlobResponse({ ok: false, status: 501, text: "files not configured" }))
+    const transport = createHttpTransport({ baseUrl: "http://api.example.com", fetchImpl })
+    await expect(transport.fetchBlob({ path: "/files/x/content" })).rejects.toMatchObject({
+      status: 501,
+    })
   })
 })

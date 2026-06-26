@@ -7,6 +7,7 @@ import {
   Plug,
   Settings,
   Terminal,
+  FolderTree,
   type LucideIcon,
 } from "lucide-react"
 
@@ -30,6 +31,8 @@ export function resolveIcon(name?: string): LucideIcon {
       return Settings
     case "console":
       return Terminal
+    case "files":
+      return FolderTree
     default:
       return Circle
   }

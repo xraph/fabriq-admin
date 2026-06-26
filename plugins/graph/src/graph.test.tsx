@@ -26,6 +26,9 @@ function makeClient(handler: (opts: RequestOpts) => unknown): {
       throw new Error("not used")
     },
     async *stream(): AsyncIterable<unknown> {},
+    async fetchBlob() {
+      throw new Error("not used")
+    },
   }
   return {
     client: new FabriqClient({ baseUrl: "http://test", transport }),

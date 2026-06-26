@@ -43,6 +43,22 @@ class FakeTransport implements FabriqTransport {
       yield event
     }
   }
+
+  lastFetchBlob: Parameters<FabriqTransport["fetchBlob"]>[0] | null = null
+  private _fetchBlobResult: Awaited<ReturnType<FabriqTransport["fetchBlob"]>> = {
+    blob: new Blob([]),
+    headers: {},
+    status: 200,
+  }
+
+  setFetchBlobResult(v: Awaited<ReturnType<FabriqTransport["fetchBlob"]>>) {
+    this._fetchBlobResult = v
+  }
+
+  async fetchBlob(opts: Parameters<FabriqTransport["fetchBlob"]>[0]) {
+    this.lastFetchBlob = opts
+    return this._fetchBlobResult
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -426,5 +442,124 @@ describe("FabriqClient", () => {
     await expect(
       client.graphQuery({ cypher: "MATCH (n) RETURN n" }),
     ).rejects.toMatchObject({ status: 501 })
+  })
+
+  // -------------------------------------------------------------------------
+  // File plane
+  // -------------------------------------------------------------------------
+
+  it("listFiles — GET /files (no parent) and returns .items", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({
+      items: [
+        { id: "f1", name: "docs", kind: "folder" },
+        { id: "f2", name: "a.txt", kind: "file", size: 3, contentType: "text/plain" },
+      ],
+    })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    const result = await client.listFiles()
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/files")
+    expect(result).toHaveLength(2)
+    expect(result[0]).toMatchObject({ id: "f1", kind: "folder" })
+  })
+
+  it("listFiles — passes parent as a query param", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ items: [] })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await client.listFiles({ parent: "folder-1", limit: 50, offset: 10 })
+    expect(transport.lastRequest?.query).toMatchObject({
+      parent: "folder-1",
+      limit: 50,
+      offset: 10,
+    })
+  })
+
+  it("createFolder — POST /files/folder with {parentId,name}", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ id: "nf", name: "new", kind: "folder" })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    const node = await client.createFolder({ parentId: "p1", name: "new" })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/files/folder")
+    expect(transport.lastRequest?.body).toEqual({ parentId: "p1", name: "new" })
+    expect(node).toMatchObject({ id: "nf", kind: "folder" })
+  })
+
+  it("uploadFile — POST /files with base64 body", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ id: "u1", name: "a.txt", kind: "file" })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await client.uploadFile({
+      parentId: "p1",
+      name: "a.txt",
+      contentType: "text/plain",
+      dataBase64: "aGVsbG8=",
+    })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/files")
+    expect(transport.lastRequest?.body).toEqual({
+      parentId: "p1",
+      name: "a.txt",
+      contentType: "text/plain",
+      dataBase64: "aGVsbG8=",
+    })
+  })
+
+  it("deleteFile — DELETE /files/:id", async () => {
+    const transport = new FakeTransport()
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await client.deleteFile("file 1")
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("DELETE")
+    // id is URL-encoded
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/files/file%201")
+  })
+
+  it("downloadFile — uses fetchBlob and parses the Content-Disposition filename", async () => {
+    const transport = new FakeTransport()
+    const blob = new Blob(["hello"], { type: "text/plain" })
+    transport.setFetchBlobResult({
+      blob,
+      headers: {
+        "content-type": "text/plain",
+        "content-disposition": 'attachment; filename="report.txt"',
+      },
+      status: 200,
+    })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    const dl = await client.downloadFile("f9")
+    expect(transport.lastFetchBlob?.path).toBe(
+      "http://localhost:9000/files/f9/content",
+    )
+    expect(dl.blob).toBe(blob)
+    expect(dl.filename).toBe("report.txt")
+    expect(dl.contentType).toBe("text/plain")
+  })
+
+  it("downloadFile — falls back to the id when no Content-Disposition", async () => {
+    const transport = new FakeTransport()
+    transport.setFetchBlobResult({
+      blob: new Blob(["x"]),
+      headers: { "content-type": "application/octet-stream" },
+      status: 200,
+    })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    const dl = await client.downloadFile("the-id")
+    expect(dl.filename).toBe("the-id")
+  })
+
+  it("listFiles — surfaces a 501 (not configured) as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(new HttpTransportError(501, '{"error":"files not configured"}'))
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await expect(client.listFiles()).rejects.toMatchObject({ status: 501 })
   })
 })
