@@ -13,6 +13,7 @@
     "@fabriq/admin-sdk": "workspace:*",
     "@fabriq/plugin-api-console": "workspace:*",
     "@fabriq/plugin-entity-browser": "workspace:*",
+    "@fabriq/plugin-graph": "workspace:*",
     "@fabriq/plugin-overview": "workspace:*",
     "@fabriq/plugin-plugins-manager": "workspace:*",
     "@fabriq/plugin-search": "workspace:*",

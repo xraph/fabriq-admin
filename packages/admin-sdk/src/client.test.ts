@@ -350,4 +350,81 @@ describe("FabriqClient", () => {
     expect(transport.lastStream?.body).toEqual(scope)
     expect(collected).toEqual(events)
   })
+
+  // -------------------------------------------------------------------------
+  // Graph
+  // -------------------------------------------------------------------------
+
+  it("graphNeighbors — GET /graph/neighbors forwards type/id/limit and returns data", async () => {
+    const transport = new FakeTransport()
+    const data = {
+      nodes: [{ id: "p1", type: "product", label: "Widget", props: {} }],
+      edges: [{ from: "p1", to: "c1", rel: "IN_CATEGORY" }],
+    }
+    transport.setRequestResponse(data)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.graphNeighbors({ type: "product", id: "p1", limit: 25 })
+
+    expect(result).toEqual(data)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/graph/neighbors")
+    expect(transport.lastRequest?.query).toMatchObject({ type: "product", id: "p1", limit: 25 })
+  })
+
+  it("graphNeighbors — omits limit when not provided", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ nodes: [], edges: [] })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.graphNeighbors({ type: "product", id: "p1" })
+
+    expect(transport.lastRequest?.query).not.toHaveProperty("limit")
+    expect(transport.lastRequest?.query).toMatchObject({ type: "product", id: "p1" })
+  })
+
+  it("graphTraverse — POST /graph/traverse forwards the body", async () => {
+    const transport = new FakeTransport()
+    const data = { nodes: [{ id: "p1" }], edges: [] }
+    transport.setRequestResponse(data)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.graphTraverse({ type: "product", id: "p1", depth: 2, limit: 50 })
+
+    expect(result).toEqual(data)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/graph/traverse")
+    expect(transport.lastRequest?.body).toEqual({ type: "product", id: "p1", depth: 2, limit: 50 })
+  })
+
+  it("graphQuery — POST /graph/query forwards cypher + params and returns columns/rows", async () => {
+    const transport = new FakeTransport()
+    const res = { columns: ["n.id", "n.name"], rows: [["p1", "Widget"]] }
+    transport.setRequestResponse(res)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.graphQuery({
+      cypher: "MATCH (n:product) RETURN n.id, n.name LIMIT 1",
+      params: { x: 1 },
+    })
+
+    expect(result).toEqual(res)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/graph/query")
+    expect(transport.lastRequest?.body).toEqual({
+      cypher: "MATCH (n:product) RETURN n.id, n.name LIMIT 1",
+      params: { x: 1 },
+    })
+  })
+
+  it("graphQuery — surfaces a 501 as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(new HttpTransportError(501, '{"error":"graph not configured"}'))
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await expect(
+      client.graphQuery({ cypher: "MATCH (n) RETURN n" }),
+    ).rejects.toMatchObject({ status: 501 })
+  })
 })

@@ -30,8 +30,104 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@fabriq/ui"
-import { ArrowLeft, Copy, Check, Pencil, Trash2 } from "lucide-react"
+import { ArrowLeft, Copy, Check, Pencil, Trash2, Share2 } from "lucide-react"
 import { EntityForm } from "./EntityForm"
+
+// ---------------------------------------------------------------------------
+// Relationships panel — lists related graph nodes (rel · id · label) with a
+// link to navigate. Degrades quietly when the graph isn't configured.
+// ---------------------------------------------------------------------------
+
+function RelationshipsPanel({ type, id }: { type: string; id: string }) {
+  const { navigate } = usePluginHost()
+  const { data, isLoading, isError } = useFabriqQuery(
+    ["neighbors", type, id],
+    (client) => client.graphNeighbors({ type, id, limit: 25 }),
+    { enabled: Boolean(type) && Boolean(id), retry: false },
+  )
+
+  // Graph not configured (501) or any error → hide the panel entirely.
+  if (isError) return null
+
+  const nodes = data?.nodes ?? []
+  const edges = data?.edges ?? []
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
+
+  // One row per edge incident to this entity, pointing at the OTHER node.
+  const related = edges
+    .map((e) => {
+      const otherId = e.from === id ? e.to : e.from
+      const node = nodeById.get(otherId)
+      return node ? { rel: e.rel, node } : null
+    })
+    .filter(
+      (r): r is { rel: string | undefined; node: (typeof nodes)[number] } =>
+        r !== null,
+    )
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Share2 className="h-4 w-4" aria-hidden="true" />
+            Relationships
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-16 w-full" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (related.length === 0) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Share2 className="h-4 w-4" aria-hidden="true" />
+          Relationships <Badge variant="secondary">{related.length}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="flex flex-col gap-1.5" aria-label="Related entities">
+          {related.map(({ rel, node }, i) => (
+            <li
+              key={`${node.id}-${i}`}
+              className="flex items-center gap-2 text-sm"
+              data-testid="relationship-row"
+            >
+              {rel && (
+                <Badge variant="outline" className="font-mono text-xs">
+                  {rel}
+                </Badge>
+              )}
+              <button
+                type="button"
+                className="font-mono hover:underline text-left"
+                onClick={() =>
+                  navigate(
+                    "entities/" +
+                      encodeURIComponent(node.type || type) +
+                      "/" +
+                      encodeURIComponent(node.id),
+                  )
+                }
+              >
+                {node.id}
+              </button>
+              {node.label && (
+                <span className="text-muted-foreground truncate">{node.label}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  )
+}
 
 function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false)
@@ -258,6 +354,8 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
           </CardContent>
         </Card>
       )}
+
+      {data && <RelationshipsPanel type={type} id={id} />}
 
       {/* Edit dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

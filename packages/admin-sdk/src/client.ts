@@ -146,6 +146,38 @@ export type NewPluginRecord = Omit<PluginRecord, "id">
 export type CapabilityFlags = Record<string, boolean>
 
 // ---------------------------------------------------------------------------
+// Graph types
+// ---------------------------------------------------------------------------
+
+/** A node in the knowledge graph. */
+export interface GraphNode {
+  id: string
+  type?: string
+  label?: string
+  props?: Record<string, unknown>
+}
+
+/** A directed edge between two graph nodes. */
+export interface GraphEdge {
+  from: string
+  to: string
+  rel?: string
+  props?: Record<string, unknown>
+}
+
+/** Nodes + edges returned by neighbors/traverse. */
+export interface GraphData {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+}
+
+/** Tabular result of a read-only Cypher query. */
+export interface GraphQueryResult {
+  columns: string[]
+  rows: unknown[][]
+}
+
+// ---------------------------------------------------------------------------
 // FabriqClient
 // ---------------------------------------------------------------------------
 
@@ -333,6 +365,63 @@ export class FabriqClient {
     return this.transport.request<{ matches: VectorMatch[] }>({
       method: "POST",
       path: `${this.baseUrl}/search/vector`,
+      body,
+    })
+  }
+
+  /**
+   * GET /graph/neighbors?type=&id=&limit= — direct neighbors of a node.
+   *
+   * Surfaces backend failures as a thrown HttpTransportError so callers can
+   * inspect `.status` (e.g. 501 "graph not configured").
+   */
+  graphNeighbors(params: {
+    type: string
+    id: string
+    limit?: number
+  }): Promise<GraphData> {
+    const query: Record<string, string | number | undefined> = {
+      type: params.type,
+      id: params.id,
+    }
+    if (params.limit !== undefined) query.limit = params.limit
+    return this.transport.request<GraphData>({
+      method: "GET",
+      path: `${this.baseUrl}/graph/neighbors`,
+      query,
+    })
+  }
+
+  /**
+   * POST /graph/traverse — breadth-bounded traversal from a node.
+   * `depth` is 1–3; the backend caps it. Surfaces failures (e.g. 501) as a
+   * thrown HttpTransportError.
+   */
+  graphTraverse(body: {
+    type: string
+    id: string
+    depth: number
+    limit?: number
+  }): Promise<GraphData> {
+    return this.transport.request<GraphData>({
+      method: "POST",
+      path: `${this.baseUrl}/graph/traverse`,
+      body,
+    })
+  }
+
+  /**
+   * POST /graph/query — read-only Cypher. Returns `{columns, rows}`.
+   * Mutating cypher → 400; graph not configured → 501. Both surface as a
+   * thrown HttpTransportError with the relevant `.status`.
+   */
+  graphQuery(body: {
+    cypher: string
+    params?: Record<string, unknown>
+  }): Promise<GraphQueryResult> {
+    return this.transport.request<GraphQueryResult>({
+      method: "POST",
+      path: `${this.baseUrl}/graph/query`,
       body,
     })
   }

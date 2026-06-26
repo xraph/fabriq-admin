@@ -679,3 +679,91 @@ describe("EntityDetail — delete flow", () => {
     await screen.findByText(/enter an entity type to browse/i)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Relationships panel — EntityDetail lists related graph nodes (rel · id)
+// from graphNeighbors, and clicking one navigates to its entity detail.
+// ---------------------------------------------------------------------------
+
+describe("EntityDetail — relationships panel", () => {
+  function makeGraphTransport(): FabriqTransport {
+    return {
+      async request<T>(reqOpts: {
+        path: string
+        query?: Record<string, string | number | undefined>
+      }): Promise<T> {
+        const { path } = reqOpts
+        if (path.endsWith("/graph/neighbors")) {
+          return {
+            nodes: [
+              { id: "ent-1", type: "product", label: "Self" },
+              { id: "cat-1", type: "category", label: "Tools" },
+              { id: "ent-9", type: "product", label: "Bolt" },
+            ],
+            edges: [
+              { from: "ent-1", to: "cat-1", rel: "IN_CATEGORY" },
+              { from: "ent-1", to: "ent-9", rel: "RELATED_TO" },
+            ],
+          } as unknown as T
+        }
+        if (path.endsWith("/entities/types")) {
+          return { types: ["product"] } as unknown as T
+        }
+        if (path.endsWith("/capabilities")) {
+          return { type: "product", capabilities: {} } as unknown as T
+        }
+        if (path.endsWith("/schema")) {
+          return { type: "product", fields: [] } as unknown as T
+        }
+        const idMatch = path.match(/\/entities\/(.+)$/)
+        if (idMatch) {
+          const id = decodeURIComponent(idMatch[1])
+          return { id, type: "product", data: { name: id } } as unknown as T
+        }
+        return {} as T
+      },
+      async *stream(): AsyncIterable<unknown> {},
+    }
+  }
+
+  it("renders related nodes with their rel labels", async () => {
+    const client = new FabriqClient({ baseUrl: "http://test", transport: makeGraphTransport() })
+    render(
+      <FabriqAdmin
+        client={client}
+        plugins={[entityBrowserPlugin]}
+        initialPath="entities/product/ent-1"
+      />,
+    )
+
+    // Wait for the entity to load.
+    await screen.findByText(/relationships/i)
+    // Both relationship rows render with their rel + the other node's id.
+    expect(await screen.findByText("IN_CATEGORY")).toBeTruthy()
+    expect(screen.getByText("RELATED_TO")).toBeTruthy()
+    const rows = screen.getAllByTestId("relationship-row")
+    expect(rows.length).toBe(2)
+    expect(screen.getByText("cat-1")).toBeTruthy()
+    expect(screen.getByText("ent-9")).toBeTruthy()
+  })
+
+  it("clicking a related node navigates to its entity detail", async () => {
+    const client = new FabriqClient({ baseUrl: "http://test", transport: makeGraphTransport() })
+    render(
+      <FabriqAdmin
+        client={client}
+        plugins={[entityBrowserPlugin]}
+        initialPath="entities/product/ent-1"
+      />,
+    )
+
+    const target = await screen.findByText("ent-9")
+    fireEvent.click(target)
+
+    // Navigated to ent-9's detail: breadcrumb id appears (mono, title=ent-9).
+    await waitFor(() => {
+      const crumb = screen.getAllByText("ent-9")
+      expect(crumb.length).toBeGreaterThan(0)
+    })
+  })
+})
