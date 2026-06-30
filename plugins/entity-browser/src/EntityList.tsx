@@ -36,8 +36,9 @@ import { EntityForm } from "./EntityForm"
 
 const PAGE_LIMIT = 50
 
-export function EntityList() {
-  const [type, setType] = useState("")
+export function EntityList({ params }: { params?: { type?: string } } = {}) {
+  const initialType = params?.type ? decodeURIComponent(params.type) : ""
+  const [type, setType] = useState(initialType)
   const [cursor, setCursor] = useState<string | undefined>(undefined)
   // Accumulated items per type — keyed by type string
   const [accumulated, setAccumulated] = useState<Record<string, EntityRecord[]>>({})

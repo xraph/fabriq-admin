@@ -103,12 +103,23 @@ describe("entityBrowserPlugin shape", () => {
   })
 
   it("detail route uses entities/:type/:id pattern", () => {
-    const detailRoute = entityBrowserPlugin.routes.find((r) => r.path !== "entities")
+    const detailRoute = entityBrowserPlugin.routes.find((r) => r.path === "entities/:type/:id")
     expect(detailRoute?.path).toBe("entities/:type/:id")
   })
 })
 
 describe("EntityList", () => {
+  it("seeds the type from the entities/:type route param and lists immediately", async () => {
+    const client = makeFakeClient()
+    render(
+      <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities/node" />,
+    )
+    // No need to type a type — rows appear because the param seeded it.
+    await screen.findByText("ent-1")
+    await screen.findByText("ent-2")
+    expect(screen.queryByText(/enter an entity type to browse/i)).toBeNull()
+  })
+
   it("shows type prompt before a type is entered", () => {
     const client = makeFakeClient()
     render(
