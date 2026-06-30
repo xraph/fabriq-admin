@@ -6,7 +6,7 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@fabriq/ui"
-import { Building2, Check, Plus, ChevronDown, X } from "lucide-react"
+import { Building2, Check, Plus, ChevronsUpDown, X } from "lucide-react"
 import type { TenantStore } from "./tenant"
 import { useTenant } from "./tenant"
 
@@ -69,14 +69,17 @@ export function TenantSwitcher({ store }: TenantSwitcherProps) {
       {/* PopoverTrigger from @base-ui/react already renders a <button>;
           do not wrap with <Button> to avoid nested <button> elements. */}
       <PopoverTrigger
-        className="inline-flex w-full items-center justify-between gap-2 rounded-md px-2 h-8 text-xs font-normal text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[popup-open]:bg-sidebar-accent"
         aria-label={tenant ? `Active tenant: ${tenant}` : "No tenant selected"}
       >
-        <span className="flex items-center gap-1.5 truncate">
-          <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="truncate">{tenant ?? "No tenant"}</span>
-        </span>
-        <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+          <Building2 className="size-4" aria-hidden="true" />
+        </div>
+        <div className="grid flex-1 text-left leading-tight">
+          <span className="truncate font-medium">{tenant ?? "No tenant"}</span>
+          <span className="truncate text-xs text-muted-foreground">Tenant</span>
+        </div>
+        <ChevronsUpDown className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </PopoverTrigger>
 
       <PopoverContent

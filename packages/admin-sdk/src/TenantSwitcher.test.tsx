@@ -97,4 +97,12 @@ describe("TenantSwitcher", () => {
     })
     expect(document.body.textContent).not.toMatch(/clear tenant/i)
   })
+
+  it("shows a 'Tenant' sublabel in the team-switcher trigger", () => {
+    const store = makeStore("acme")
+    render(<TenantSwitcher store={store} />)
+    const trigger = screen.getByRole("button", { name: /active tenant: acme/i })
+    expect(trigger.textContent).toMatch(/tenant/i)
+    expect(trigger.textContent).toMatch(/acme/)
+  })
 })
