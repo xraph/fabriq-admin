@@ -19,13 +19,21 @@ import { useEntityPins } from "./pins"
 
 const VISIBLE_CAP = 8
 
+const NOOP_SUBSCRIBE = () => () => {}
+
 export function NavEntities() {
   const { navigate, path } = usePluginHost()
   const tenantStore = useTenantContext()
   const { pinned, toggle, isPinned } = useEntityPins(tenantStore)
 
+  const tenantId = React.useSyncExternalStore(
+    tenantStore ? tenantStore.subscribe : NOOP_SUBSCRIBE,
+    () => tenantStore?.get() ?? null,
+    () => null,
+  )
+
   const { data: knownTypes } = useFabriqQuery(
-    ["entity-types"],
+    ["entity-types", tenantId],
     (c) => c.listEntityTypes(),
   )
 

@@ -32,6 +32,7 @@ export function Breadcrumbs({ sectionLabel, sectionTo, params, onNavigate }: Bre
           <>
             <BreadcrumbItem className="hidden md:block">
               <BreadcrumbLink
+                href="#"
                 onClick={(e) => {
                   e.preventDefault()
                   onNavigate?.(sectionTo)
