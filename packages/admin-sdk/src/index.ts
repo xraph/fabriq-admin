@@ -34,6 +34,14 @@ export type { TenantStore, TenantStoreOptions, UseTenantResult } from "./tenant"
 export { TenantSwitcher } from "./TenantSwitcher"
 export type { TenantSwitcherProps } from "./TenantSwitcher"
 
+export { createEntityPinStore, useEntityPins } from "./pins"
+export type { EntityPinStore, UseEntityPinsResult } from "./pins"
+export { NavEntities } from "./NavEntities"
+export { NavUser } from "./NavUser"
+export type { NavUserProps } from "./NavUser"
+export { Breadcrumbs } from "./Breadcrumbs"
+export type { BreadcrumbsProps } from "./Breadcrumbs"
+
 // --- experimental: live streaming (no Phase 1 backend) ---
 // FabriqTransport.stream, FabriqClient.watch(), and WatchScope are re-exported
 // via `export * from "./client"` above. They are valid forward infrastructure for
