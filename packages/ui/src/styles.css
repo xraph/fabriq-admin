@@ -165,8 +165,13 @@
   .fabriq-admin ::backdrop {
     box-sizing: border-box;
     /* width 0 + solid so `border-*` utilities re-add width; kills native borders
-       (this is what removes the grey boxed look on raw <button>s). */
-    border: 0 solid;
+       (this is what removes the grey boxed look on raw <button>s).
+       Default border-color to the soft --border token (Tailwind v4 defaults to
+       currentColor, which makes bare `border-b`/`border-t` render in the dark
+       foreground colour — that's the "hard borders". Set the token instead). */
+    border-width: 0;
+    border-style: solid;
+    border-color: var(--border);
     margin: 0;
     padding: 0;
   }
