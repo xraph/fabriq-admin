@@ -320,6 +320,52 @@ export interface CrdtUpdates {
 }
 
 // ---------------------------------------------------------------------------
+// Distillation (DigestNode Merkle tree) types
+// ---------------------------------------------------------------------------
+
+/**
+ * A single node in the per-tenant distillation Merkle tree (the "AI data
+ * fabric"). Levels: L2 = tenant root, L1 = scope nodes, L0 = leaf (per-entity)
+ * digests. `childCount`, the hashes, and `summary` may be absent depending on
+ * the endpoint that produced the node.
+ */
+export interface DigestNode {
+  id: string
+  level: number
+  scopeId?: string
+  childCount?: number
+  contentHash?: string
+  semHash?: string
+  summary?: string
+  parentIds?: string[]
+}
+
+/**
+ * The whole digest tree as a flat node list plus the id of the tenant root.
+ * `nodes` may be empty when nothing has been distilled yet for the tenant.
+ */
+export interface DigestMap {
+  rootId: string
+  nodes: DigestNode[]
+}
+
+/** A child reference returned when drilling into a single digest node. */
+export interface DigestChild {
+  id: string
+  kind?: string
+  summary?: string
+  contentHash?: string
+  semHash?: string
+}
+
+/** A single digest node plus its summary and immediate children. */
+export interface DigestView {
+  node: DigestNode
+  summary?: string
+  children: DigestChild[]
+}
+
+// ---------------------------------------------------------------------------
 // FabriqClient
 // ---------------------------------------------------------------------------
 
@@ -708,6 +754,39 @@ export class FabriqClient {
       method: "GET",
       path: `${this.baseUrl}/crdt/${encodeDocId(docId)}/updates`,
       ...(query ? { query } : {}),
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Distillation (DigestNode Merkle tree) plane
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /distill/map — the whole per-tenant digest Merkle tree as a flat node
+   * list plus the tenant root id. `nodes` may be empty when nothing has been
+   * distilled yet for the tenant. An unconfigured distillation plane surfaces
+   * as a thrown HttpTransportError with status 501.
+   */
+  distillMap(): Promise<DigestMap> {
+    return this.transport.request<DigestMap>({
+      method: "GET",
+      path: `${this.baseUrl}/distill/map`,
+    })
+  }
+
+  /**
+   * GET /distill/node/:id — a single digest node, its summary, and its
+   * immediate children (used for lazy drill-down).
+   *
+   * The `id` looks like `digest:2:tenant` (contains colons, no slashes); it is
+   * percent-encoded as a single path segment. 404 if the node is absent; 501 if
+   * the distillation plane is not configured — both surface as a thrown
+   * HttpTransportError with the relevant `.status`.
+   */
+  distillNode(id: string): Promise<DigestView> {
+    return this.transport.request<DigestView>({
+      method: "GET",
+      path: `${this.baseUrl}/distill/node/${encodeURIComponent(id)}`,
     })
   }
 

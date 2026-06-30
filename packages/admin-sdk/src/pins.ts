@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react"
+import { useSyncExternalStore, useRef } from "react"
 import type { TenantStore } from "./tenant"
 
 const SENTINEL = "__none__"
@@ -56,6 +56,7 @@ export function createEntityPinStore(
 ): EntityPinStore {
   const storage = defaultStorage(opts.storage)
   const listeners = new Set<() => void>()
+  let unsubTenant: (() => void) | null = null
 
   function tenant(): string | null {
     return tenantStore ? tenantStore.get() : null
@@ -69,9 +70,6 @@ export function createEntityPinStore(
     storage.setItem(keyFor(tenant()), JSON.stringify(next))
     notify()
   }
-
-  // Re-notify on tenant change so the active set is recomputed by consumers.
-  const unsubTenant = tenantStore ? tenantStore.subscribe(notify) : () => {}
 
   return {
     get() {
@@ -95,10 +93,19 @@ export function createEntityPinStore(
       return readSet(storage, tenant()).includes(type)
     },
     subscribe(cb) {
+      const wasEmpty = listeners.size === 0
       listeners.add(cb)
+      // Subscribe to tenant changes only when we go from 0 to 1 listener
+      if (wasEmpty && tenantStore) {
+        unsubTenant = tenantStore.subscribe(notify)
+      }
       return () => {
         listeners.delete(cb)
-        if (listeners.size === 0) unsubTenant()
+        // Unsubscribe when all listeners are gone
+        if (listeners.size === 0 && unsubTenant) {
+          unsubTenant()
+          unsubTenant = null
+        }
       }
     },
   }
@@ -132,7 +139,6 @@ export function useEntityPins(tenantStore: TenantStore | null): UseEntityPinsRes
 }
 
 // Keep one pin store per tenantStore for the lifetime of the hook owner.
-import { useRef } from "react"
 function useMemoizedPinStore(tenantStore: TenantStore | null): EntityPinStore {
   const ref = useRef<{ key: TenantStore | null; store: EntityPinStore } | null>(null)
   if (!ref.current || ref.current.key !== tenantStore) {

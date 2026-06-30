@@ -11,6 +11,7 @@ import {
   FileText,
   MapPin,
   Activity,
+  GitMerge,
   type LucideIcon,
 } from "lucide-react"
 
@@ -45,6 +46,9 @@ export function resolveIcon(name?: string): LucideIcon {
     case "activity":
     case "live":
       return Activity
+    case "git-merge":
+    case "distill":
+      return GitMerge
     default:
       return Circle
   }

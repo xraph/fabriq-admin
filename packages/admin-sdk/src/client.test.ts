@@ -669,6 +669,62 @@ describe("FabriqClient", () => {
   })
 
   // -------------------------------------------------------------------------
+  // Distillation (DigestNode Merkle tree) plane
+  // -------------------------------------------------------------------------
+
+  it("distillMap — calls GET /distill/map and returns the digest map", async () => {
+    const transport = new FakeTransport()
+    const map = {
+      rootId: "digest:2:tenant",
+      nodes: [{ id: "digest:2:tenant", level: 2, childCount: 2 }],
+    }
+    transport.setRequestResponse(map)
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    const result = await client.distillMap()
+    expect(result).toEqual(map)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/distill/map")
+  })
+
+  it("distillMap — surfaces a 501 (plane not configured) as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(
+      new HttpTransportError(501, '{"error":"distillation not configured"}'),
+    )
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await expect(client.distillMap()).rejects.toMatchObject({ status: 501 })
+  })
+
+  it("distillNode — calls GET /distill/node/:id and ENCODES the colon-containing id", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({
+      node: { id: "digest:2:tenant", level: 2 },
+      summary: "root",
+      children: [],
+    })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    const result = await client.distillNode("digest:2:tenant")
+    expect(result.node.id).toBe("digest:2:tenant")
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    // The id is percent-encoded as a single path segment (colons → %3A).
+    expect(transport.lastRequest?.path).toBe(
+      `http://localhost:9000/distill/node/${encodeURIComponent("digest:2:tenant")}`,
+    )
+    expect(transport.lastRequest?.path).toContain("%3A")
+  })
+
+  it("distillNode — surfaces a 404 (node absent) as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(new HttpTransportError(404, '{"error":"not found"}'))
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await expect(client.distillNode("digest:0:missing")).rejects.toMatchObject({
+      status: 404,
+    })
+  })
+
+  // -------------------------------------------------------------------------
   // Live query (live tail)
   // -------------------------------------------------------------------------
 
