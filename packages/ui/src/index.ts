@@ -102,3 +102,12 @@ export {
   DialogTitle,
   DialogDescription,
 } from "./components/ui/dialog"
+export {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+  BreadcrumbEllipsis,
+} from "./components/ui/breadcrumb"
