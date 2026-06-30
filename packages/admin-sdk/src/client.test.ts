@@ -350,6 +350,47 @@ describe("FabriqClient", () => {
     ).rejects.toMatchObject({ status: 501 })
   })
 
+  it("spatialWithin — POST /spatial/within forwards the body", async () => {
+    const transport = new FakeTransport()
+    const matches = [
+      { id: "sf1", distanceM: 1200, lng: -122.42, lat: 37.77, data: { name: "Ferry Building" } },
+    ]
+    transport.setRequestResponse({ matches })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.spatialWithin({
+      entity: "place",
+      lng: -122.42,
+      lat: 37.77,
+      radiusM: 50000,
+      limit: 25,
+    })
+
+    expect(result).toEqual({ matches })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/spatial/within")
+    expect(transport.lastRequest?.body).toEqual({
+      entity: "place",
+      lng: -122.42,
+      lat: 37.77,
+      radiusM: 50000,
+      limit: 25,
+    })
+  })
+
+  it("spatialWithin — surfaces a 501 as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(
+      new HttpTransportError(501, '{"error":"spatial not configured"}'),
+    )
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await expect(
+      client.spatialWithin({ entity: "place", lng: 0, lat: 0, radiusM: 1000 }),
+    ).rejects.toMatchObject({ status: 501 })
+  })
+
   it("watch — calls stream with /watch path and yields events", async () => {
     const transport = new FakeTransport()
     const events = [{ type: "delta", id: "1" }, { type: "delta", id: "2" }]

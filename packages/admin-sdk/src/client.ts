@@ -191,6 +191,28 @@ export interface FileDownload {
 }
 
 // ---------------------------------------------------------------------------
+// Spatial (geo) types
+// ---------------------------------------------------------------------------
+
+/**
+ * A single spatial match from a within-radius query: the entity id, its
+ * distance (metres) from the query center, the point's coordinates, and
+ * (optionally) the hydrated entity data when the backend inlined it.
+ */
+export interface SpatialMatch {
+  id: string
+  distanceM?: number
+  lng?: number
+  lat?: number
+  data?: Record<string, unknown>
+}
+
+/** Result of a within-radius spatial query — nearest-first matches. */
+export interface SpatialResult {
+  matches: SpatialMatch[]
+}
+
+// ---------------------------------------------------------------------------
 // Graph types
 // ---------------------------------------------------------------------------
 
@@ -496,6 +518,34 @@ export class FabriqClient {
     return this.transport.request<GraphQueryResult>({
       method: "POST",
       path: `${this.baseUrl}/graph/query`,
+      body,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Spatial (geo) plane
+  // -------------------------------------------------------------------------
+
+  /**
+   * POST /spatial/within — within-radius geo query.
+   *
+   * Body `{entity, lng, lat, radiusM, limit?}` → `{matches}` (nearest-first;
+   * each match carries its distance in metres and the point coordinates, plus
+   * the hydrated entity row when available). `radiusM` is metres.
+   *
+   * Surfaces backend failures as a thrown HttpTransportError so callers can
+   * inspect `.status` (e.g. 501 "spatial not configured", 400 missing fields).
+   */
+  spatialWithin(body: {
+    entity: string
+    lng: number
+    lat: number
+    radiusM: number
+    limit?: number
+  }): Promise<SpatialResult> {
+    return this.transport.request<SpatialResult>({
+      method: "POST",
+      path: `${this.baseUrl}/spatial/within`,
       body,
     })
   }

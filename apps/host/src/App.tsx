@@ -12,6 +12,7 @@ import { overviewPlugin } from "@fabriq/plugin-overview"
 import { entityBrowserPlugin } from "@fabriq/plugin-entity-browser"
 import { searchPlugin } from "@fabriq/plugin-search"
 import { graphPlugin } from "@fabriq/plugin-graph"
+import { spatialPlugin } from "@fabriq/plugin-spatial"
 import { filesPlugin } from "@fabriq/plugin-files"
 import { crdtPlugin } from "@fabriq/plugin-crdt"
 import { pluginsManagerPlugin } from "@fabriq/plugin-plugins-manager"
@@ -62,6 +63,7 @@ const plugins = [
   entityBrowserPlugin,
   searchPlugin,
   graphPlugin,
+  spatialPlugin,
   filesPlugin,
   crdtPlugin,
   pluginsManagerPlugin,

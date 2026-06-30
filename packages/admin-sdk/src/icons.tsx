@@ -9,6 +9,7 @@ import {
   Terminal,
   FolderTree,
   FileText,
+  MapPin,
   type LucideIcon,
 } from "lucide-react"
 
@@ -37,6 +38,9 @@ export function resolveIcon(name?: string): LucideIcon {
     case "file":
     case "document":
       return FileText
+    case "map":
+    case "spatial":
+      return MapPin
     default:
       return Circle
   }

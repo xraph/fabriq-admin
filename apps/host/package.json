@@ -19,6 +19,7 @@
     "@fabriq/plugin-overview": "workspace:*",
     "@fabriq/plugin-plugins-manager": "workspace:*",
     "@fabriq/plugin-search": "workspace:*",
+    "@fabriq/plugin-spatial": "workspace:*",
     "@fabriq/ui": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
