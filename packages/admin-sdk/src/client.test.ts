@@ -391,6 +391,55 @@ describe("FabriqClient", () => {
     ).rejects.toMatchObject({ status: 501 })
   })
 
+  it("recall — POST /recall forwards the body and returns the pack", async () => {
+    const transport = new FakeTransport()
+    const pack = {
+      items: [
+        {
+          entity: "product",
+          id: "p1",
+          row: { name: "Widget" },
+          score: 3.2,
+          source: ["vector", "search"],
+          tokens: 42,
+        },
+      ],
+      omitted: 1,
+      tokens: 42,
+      warnings: ["graph channel skipped"],
+    }
+    transport.setRequestResponse(pack)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.recall({
+      query: "active product",
+      entities: ["product", "customer"],
+      budget: 2000,
+      k: 10,
+    })
+
+    expect(result).toEqual(pack)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/recall")
+    expect(transport.lastRequest?.body).toEqual({
+      query: "active product",
+      entities: ["product", "customer"],
+      budget: 2000,
+      k: 10,
+    })
+  })
+
+  it("recall — surfaces a 501 (not configured) as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(
+      new HttpTransportError(501, '{"error":"recall not configured"}'),
+    )
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await expect(client.recall({ query: "x" })).rejects.toMatchObject({ status: 501 })
+  })
+
   it("watch — calls stream with /watch path and yields events", async () => {
     const transport = new FakeTransport()
     const events = [{ type: "delta", id: "1" }, { type: "delta", id: "2" }]

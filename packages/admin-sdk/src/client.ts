@@ -366,6 +366,53 @@ export interface DigestView {
 }
 
 // ---------------------------------------------------------------------------
+// Recall (agent-toolkit hybrid recall) types
+// ---------------------------------------------------------------------------
+
+/**
+ * A single item in a hybrid-recall pack. `source` lists every channel that
+ * contributed to this item surfacing — "vector" (semantic), "search"
+ * (full-text), and/or "graph" (graph-expanded) — making the RRF fusion visible
+ * ("WHY did this surface?"). `score` is the fused RRF score (higher = better),
+ * `row` is the hydrated entity object, and `tokens` is the item's token cost.
+ */
+export interface RecallItem {
+  entity: string
+  id: string
+  row?: Record<string, unknown>
+  score: number
+  source: string[]
+  tokens?: number
+}
+
+/**
+ * The result of a hybrid recall: a fused, ranked list of items plus budget
+ * accounting. `omitted` is how many candidates were dropped to fit `budget`,
+ * `tokens` is the total token cost of the returned items, and `warnings`
+ * carries any non-fatal notes from the backend (e.g. a channel being skipped).
+ */
+export interface RecallPack {
+  items: RecallItem[]
+  omitted?: number
+  tokens?: number
+  warnings?: string[]
+}
+
+/**
+ * A hybrid-recall request. `query` is required; `entities` scopes the recall to
+ * specific entity types; `budget` caps the total token cost of the returned
+ * pack; `k` bounds the per-channel candidate count; `hops` bounds graph
+ * expansion depth.
+ */
+export interface RecallRequest {
+  query: string
+  entities?: string[]
+  budget?: number
+  k?: number
+  hops?: number
+}
+
+// ---------------------------------------------------------------------------
 // FabriqClient
 // ---------------------------------------------------------------------------
 
@@ -639,6 +686,32 @@ export class FabriqClient {
       method: "POST",
       path: `${this.baseUrl}/spatial/within`,
       body,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Recall (agent-toolkit hybrid recall)
+  // -------------------------------------------------------------------------
+
+  /**
+   * POST /recall — run the agent toolkit's hybrid recall: RRF fusion of the
+   * vector, full-text search, and graph channels into one fused, ranked context
+   * pack.
+   *
+   * Body `{query, entities?, budget?, k?, hops?}` → `{items, omitted?, tokens?,
+   * warnings?}`. Items are returned best-first (highest fused RRF score), each
+   * carrying the channels that contributed (`source`) and the hydrated row.
+   *
+   * A missing query surfaces as a 400; a backend without the recall facade
+   * configured surfaces as a 501 — both thrown as an HttpTransportError so
+   * callers can inspect `.status`. The tenant is attached by the transport
+   * (X-Tenant-ID), not the body.
+   */
+  recall(req: RecallRequest): Promise<RecallPack> {
+    return this.transport.request<RecallPack>({
+      method: "POST",
+      path: `${this.baseUrl}/recall`,
+      body: req,
     })
   }
 

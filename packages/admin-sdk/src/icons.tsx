@@ -12,6 +12,7 @@ import {
   MapPin,
   Activity,
   GitMerge,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react"
 
@@ -49,6 +50,9 @@ export function resolveIcon(name?: string): LucideIcon {
     case "git-merge":
     case "distill":
       return GitMerge
+    case "sparkles":
+    case "recall":
+      return Sparkles
     default:
       return Circle
   }

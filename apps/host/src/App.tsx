@@ -11,6 +11,7 @@ import {
 import { overviewPlugin } from "@fabriq/plugin-overview"
 import { entityBrowserPlugin } from "@fabriq/plugin-entity-browser"
 import { searchPlugin } from "@fabriq/plugin-search"
+import { recallPlugin } from "@fabriq/plugin-recall"
 import { livePlugin } from "@fabriq/plugin-live"
 import { graphPlugin } from "@fabriq/plugin-graph"
 import { spatialPlugin } from "@fabriq/plugin-spatial"
@@ -64,6 +65,7 @@ const plugins = [
   overviewPlugin,
   entityBrowserPlugin,
   searchPlugin,
+  recallPlugin,
   livePlugin,
   graphPlugin,
   spatialPlugin,
