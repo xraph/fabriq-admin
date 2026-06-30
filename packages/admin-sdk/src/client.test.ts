@@ -696,7 +696,7 @@ describe("FabriqClient", () => {
     await expect(client.distillMap()).rejects.toMatchObject({ status: 501 })
   })
 
-  it("distillNode — calls GET /distill/node/:id and ENCODES the colon-containing id", async () => {
+  it("distillNode — calls GET /distill/node/:id KEEPING the colons (backend matches the raw id)", async () => {
     const transport = new FakeTransport()
     transport.setRequestResponse({
       node: { id: "digest:2:tenant", level: 2 },
@@ -708,11 +708,11 @@ describe("FabriqClient", () => {
     const result = await client.distillNode("digest:2:tenant")
     expect(result.node.id).toBe("digest:2:tenant")
     expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
-    // The id is percent-encoded as a single path segment (colons → %3A).
+    // Colons are preserved (encoding them to %3A would 404 against the route).
     expect(transport.lastRequest?.path).toBe(
-      `http://localhost:9000/distill/node/${encodeURIComponent("digest:2:tenant")}`,
+      "http://localhost:9000/distill/node/digest:2:tenant",
     )
-    expect(transport.lastRequest?.path).toContain("%3A")
+    expect(transport.lastRequest?.path).not.toContain("%3A")
   })
 
   it("distillNode — surfaces a 404 (node absent) as a thrown HttpTransportError", async () => {

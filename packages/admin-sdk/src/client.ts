@@ -784,9 +784,13 @@ export class FabriqClient {
    * HttpTransportError with the relevant `.status`.
    */
   distillNode(id: string): Promise<DigestView> {
+    // Digest ids are colon-delimited (e.g. "digest:2:tenant"); the backend route
+    // matches the RAW id, so encode each segment but KEEP the colons (encoding
+    // them to %3A would 404).
+    const encodedId = id.split(":").map(encodeURIComponent).join(":")
     return this.transport.request<DigestView>({
       method: "GET",
-      path: `${this.baseUrl}/distill/node/${encodeURIComponent(id)}`,
+      path: `${this.baseUrl}/distill/node/${encodedId}`,
     })
   }
 
