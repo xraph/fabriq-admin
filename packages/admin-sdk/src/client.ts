@@ -113,6 +113,40 @@ export interface WatchScope {
   type?: string
 }
 
+// ---------------------------------------------------------------------------
+// Live query (live tail) types
+// ---------------------------------------------------------------------------
+
+/**
+ * First event of a live subscription — the initial set of rows that match the
+ * subscription's filter at subscribe time.
+ */
+export interface LiveSnapshotEvent {
+  type: "snapshot"
+  rows: Array<Record<string, unknown>>
+}
+
+/**
+ * A single change event in a live subscription. `op` is the kind of change;
+ * `row` carries the new/updated row for inserts/updates (absent for deletes).
+ */
+export interface LiveDeltaEvent {
+  type: "delta"
+  op: "insert" | "update" | "delete"
+  id: string
+  row?: Record<string, unknown>
+}
+
+/**
+ * Any event yielded by a live subscription. Known shapes are the snapshot and
+ * delta events; unknown event types (e.g. heartbeats) are tolerated via the
+ * open-ended fallback so consumers can ignore them gracefully.
+ */
+export type LiveEvent =
+  | LiveSnapshotEvent
+  | LiveDeltaEvent
+  | { type: string;[k: string]: unknown }
+
 /**
  * Field kind reported by the backend schema endpoint. The wire format may carry
  * any string; consumers should treat unknown kinds like `"unknown"`.
@@ -704,6 +738,31 @@ export class FabriqClient {
       path: `${this.baseUrl}/watch`,
       body: scope,
     })
+  }
+
+  /**
+   * POST /live (Server-Sent Events) — subscribe to an entity and stream its
+   * changes in real time ("live tail").
+   *
+   * The returned async-iterable first yields a `{type:"snapshot",rows}` event
+   * with the initial matching rows, then a `{type:"delta",op,id,row?}` event for
+   * each subsequent insert/update/delete. Periodic heartbeats (or other unknown
+   * event types) may be interleaved and should be ignored gracefully.
+   *
+   * Pass an `AbortSignal` to close the stream (Stop / unmount). The tenant is
+   * attached by the transport (X-Tenant-ID) — it is NOT part of the body. A
+   * backend without live queries configured surfaces a 501 as a thrown
+   * HttpTransportError.
+   */
+  liveSubscribe(
+    body: { entity: string; filter?: unknown; limit?: number },
+    signal?: AbortSignal,
+  ): AsyncIterable<LiveEvent> {
+    return this.transport.stream({
+      path: `${this.baseUrl}/live`,
+      body,
+      signal,
+    }) as AsyncIterable<LiveEvent>
   }
 }
 

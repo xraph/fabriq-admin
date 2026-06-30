@@ -10,6 +10,7 @@ import {
   FolderTree,
   FileText,
   MapPin,
+  Activity,
   type LucideIcon,
 } from "lucide-react"
 
@@ -41,6 +42,9 @@ export function resolveIcon(name?: string): LucideIcon {
     case "map":
     case "spatial":
       return MapPin
+    case "activity":
+    case "live":
+      return Activity
     default:
       return Circle
   }

@@ -667,4 +667,51 @@ describe("FabriqClient", () => {
     const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
     await expect(client.getCrdtDocument("welcome")).rejects.toMatchObject({ status: 501 })
   })
+
+  // -------------------------------------------------------------------------
+  // Live query (live tail)
+  // -------------------------------------------------------------------------
+
+  it("liveSubscribe — calls stream with /live path + body and yields snapshot then delta", async () => {
+    const transport = new FakeTransport()
+    const events = [
+      { type: "snapshot", rows: [{ id: "a" }] },
+      { type: "delta", op: "insert", id: "b", row: { name: "X" } },
+    ]
+    transport.setStreamEvents(events)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const collected: unknown[] = []
+    for await (const event of client.liveSubscribe({ entity: "product" })) {
+      collected.push(event)
+    }
+
+    expect(transport.lastStream?.path).toBe("http://localhost:9000/live")
+    expect(transport.lastStream?.body).toEqual({ entity: "product" })
+    expect(collected).toEqual(events)
+  })
+
+  it("liveSubscribe — forwards filter/limit + the abort signal to stream", async () => {
+    const transport = new FakeTransport()
+    transport.setStreamEvents([])
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const controller = new AbortController()
+    // Drain the iterable so the generator body runs and records lastStream.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for await (const _ of client.liveSubscribe(
+      { entity: "order", filter: { status: "open" }, limit: 50 },
+      controller.signal,
+    )) {
+      // no events
+    }
+
+    expect(transport.lastStream?.path).toBe("http://localhost:9000/live")
+    expect(transport.lastStream?.body).toEqual({
+      entity: "order",
+      filter: { status: "open" },
+      limit: 50,
+    })
+    expect(transport.lastStream?.signal).toBe(controller.signal)
+  })
 })
