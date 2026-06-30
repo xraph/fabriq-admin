@@ -86,12 +86,16 @@ function relativeTime(from: number, now: number): string {
 
 function opBadgeClass(op: LiveDeltaEvent["op"]): string {
   switch (op) {
-    case "insert":
+    case "enter":
       return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
     case "update":
       return "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-    case "delete":
+    case "leave":
       return "bg-destructive/10 text-destructive"
+    case "move":
+      return "bg-sky-500/15 text-sky-700 dark:text-sky-400"
+    case "reset":
+      return "bg-muted text-muted-foreground"
     default:
       return ""
   }
@@ -154,7 +158,10 @@ export function LivePage() {
     async function run() {
       try {
         const stream = client.liveSubscribe(
-          { entity: watchedEntity as string },
+          // Request a wide window so newly-inserted rows land inside it and
+          // fire `enter` deltas (maintained-window semantics — a small window
+          // only emits deltas for rows already in the top-N). 200 = backend max.
+          { entity: watchedEntity as string, limit: 200 },
           controller.signal,
         )
         for await (const ev of stream) {
@@ -180,7 +187,6 @@ export function LivePage() {
       }
       if (ev.type === "delta") {
         const d = ev as LiveDeltaEvent
-        if (d.op !== "insert" && d.op !== "update" && d.op !== "delete") return
         setConnecting(false)
         const item: FeedItem = {
           ...d,
@@ -371,7 +377,7 @@ export function LivePage() {
                             {relativeTime(d.receivedAt, now)}
                           </span>
                         </div>
-                        {d.op !== "delete" && (
+                        {d.op !== "leave" && (
                           <pre className="mt-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-muted-foreground">
                             {previewRow(d.row)}
                           </pre>

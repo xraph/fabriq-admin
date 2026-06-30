@@ -85,8 +85,8 @@ function renderHosted(client: FabriqClient) {
   )
 }
 
-const SNAPSHOT = { type: "snapshot", rows: [{ id: "a" }] }
-const INSERT = { type: "delta", op: "insert", id: "b", row: { name: "X" } }
+const SNAPSHOT = { type: "snapshot", rows: [{ id: "a", row: { name: "A" } }] }
+const ENTER = { type: "delta", op: "enter", id: "b", row: { name: "X" }, oldIndex: -1, newIndex: 0 }
 
 // ---------------------------------------------------------------------------
 // 1. Plugin metadata
@@ -111,8 +111,8 @@ describe("livePlugin shape", () => {
 // ---------------------------------------------------------------------------
 
 describe("LivePage — start streaming", () => {
-  it("Start subscribes to the entity, shows 'watching' status + the snapshot count, and renders the insert delta", async () => {
-    const { client, lastStreamBody } = makeClient({ events: [SNAPSHOT, INSERT] })
+  it("Start subscribes to the entity, shows 'watching' status + the snapshot count, and renders the enter delta", async () => {
+    const { client, lastStreamBody } = makeClient({ events: [SNAPSHOT, ENTER] })
     renderHosted(client)
 
     fireEvent.change(screen.getByLabelText("Entity type"), {
@@ -125,12 +125,12 @@ describe("LivePage — start streaming", () => {
     expect(screen.getByText("product")).toBeTruthy()
     await screen.findByText(/1 row at start/i)
 
-    // The insert delta row: op badge + the entity id (clickable button named "b").
-    await screen.findByText("insert")
+    // The enter delta row: op badge + the entity id (clickable button named "b").
+    await screen.findByText("enter")
     expect(screen.getByRole("button", { name: "b" })).toBeTruthy()
 
-    // liveSubscribe body carried the entity.
-    expect(lastStreamBody()).toEqual({ entity: "product" })
+    // liveSubscribe body carried the entity + the wide window.
+    expect(lastStreamBody()).toEqual({ entity: "product", limit: 200 })
   })
 })
 
@@ -177,7 +177,7 @@ describe("LivePage — 501 handling", () => {
 
 describe("LivePage — navigation", () => {
   it("clicking a delta id navigates to entities/<entity>/<id>", async () => {
-    const { client } = makeClient({ events: [SNAPSHOT, INSERT] })
+    const { client } = makeClient({ events: [SNAPSHOT, ENTER] })
     const navigate = vi.fn()
     const host = { navigate } as unknown as PluginHostValue
     render(

@@ -123,18 +123,30 @@ export interface WatchScope {
  */
 export interface LiveSnapshotEvent {
   type: "snapshot"
-  rows: Array<Record<string, unknown>>
+  /** Initial matching rows. Each is `{ id, row }` (the row payload nested under `row`). */
+  rows: Array<{ id: string; row?: Record<string, unknown> } & Record<string, unknown>>
 }
 
 /**
- * A single change event in a live subscription. `op` is the kind of change;
- * `row` carries the new/updated row for inserts/updates (absent for deletes).
+ * A single change event in a maintained-window live subscription.
+ * `op` follows fabriq's livequery vocabulary:
+ *   enter  — row newly matches / entered the window
+ *   leave  — row left the window (deleted or no longer matches)
+ *   move   — row reordered within the window
+ *   update — in-window row's payload changed
+ *   reset  — the window was reset (re-snapshot)
+ * `row` carries the row payload (absent for `leave`); `oldIndex`/`newIndex`
+ * are the row's window positions (-1 when not present).
  */
+export type LiveDeltaOp = "enter" | "leave" | "move" | "update" | "reset"
+
 export interface LiveDeltaEvent {
   type: "delta"
-  op: "insert" | "update" | "delete"
+  op: LiveDeltaOp
   id: string
   row?: Record<string, unknown>
+  oldIndex?: number
+  newIndex?: number
 }
 
 /**
