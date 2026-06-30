@@ -52,7 +52,8 @@ describe("NavEntities", () => {
   it("lists known entity types under an 'Entities' group", async () => {
     renderShell()
     const group = await screen.findByRole("group", { name: /entities/i })
-    expect(within(group).getByText("order")).toBeTruthy()
+    // Entity types load asynchronously; use findBy to wait for them.
+    expect(await within(group).findByText("order")).toBeTruthy()
     expect(within(group).getByText("user")).toBeTruthy()
     expect(within(group).getByText("invoice")).toBeTruthy()
   })
@@ -60,13 +61,18 @@ describe("NavEntities", () => {
   it("navigates to entities/<type> when a type is clicked", async () => {
     renderShell()
     const group = await screen.findByRole("group", { name: /entities/i })
-    fireEvent.click(within(group).getByText("order"))
+    // Entity types load asynchronously; wait for the row before clicking.
+    const orderText = await within(group).findByText("order")
+    fireEvent.click(orderText)
     // The route element for entities/<type> falls through to "Not found" here
     // because dummyPlugin only registers the bare `entities` route — so assert
     // the active state instead: the button for `order` is current.
     await waitFor(() => {
+      // Base UI sets data-active="" (empty string) for boolean true — per getStateAttributesProps
       const btn = within(group).getByText("order").closest("[data-active]")
-      expect(btn?.getAttribute("data-active")).toBe("true")
+      expect(btn).toBeTruthy()
+      // data-active="" means active (Base UI uses empty string for boolean-true state attributes)
+      expect(btn?.hasAttribute("data-active")).toBe(true)
     })
   })
 
@@ -74,7 +80,8 @@ describe("NavEntities", () => {
     const { tenantStore } = renderShell()
     const group = await screen.findByRole("group", { name: /entities/i })
     // Open the row action menu for "invoice" and pin it.
-    const pinBtn = within(group).getByRole("button", { name: /actions for invoice/i })
+    // Entity types load asynchronously; wait for the action button.
+    const pinBtn = await within(group).findByRole("button", { name: /actions for invoice/i })
     fireEvent.click(pinBtn)
     const pin = await screen.findByRole("menuitem", { name: /^pin$/i })
     fireEvent.click(pin)

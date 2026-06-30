@@ -40,7 +40,7 @@ export function NavEntities() {
   }
 
   return (
-    <SidebarGroup aria-label="Entities" className="group-data-[collapsible=icon]:hidden">
+    <SidebarGroup role="group" aria-label="Entities" className="group-data-[collapsible=icon]:hidden">
       <SidebarGroupLabel>Entities</SidebarGroupLabel>
       <SidebarMenu>
         {visible.map((type) => (

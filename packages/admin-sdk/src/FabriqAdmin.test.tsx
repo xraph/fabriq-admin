@@ -82,8 +82,8 @@ describe("FabriqAdmin", () => {
 
     render(<FabriqAdmin client={client} plugins={[plugin]} />)
 
-    // Nav button should be rendered
-    const navBtn = screen.getByRole("button", { name: /entities/i })
+    // Nav button should be rendered — use exact name to distinguish from NavEntities "More entities" button
+    const navBtn = screen.getByRole("button", { name: /^entities$/i })
     expect(navBtn).toBeTruthy()
 
     // Click to navigate
@@ -188,7 +188,7 @@ describe("FabriqAdmin", () => {
     expect(div?.getAttribute("data-fabriq-theme")).toBe("light")
   })
 
-  it("(theme) clicking theme toggle flips data-fabriq-theme from light to dark", () => {
+  it("(theme) toggles theme via the footer settings menu", async () => {
     const client = makeFakeClient()
     const plugin: FabriqAdminPlugin = {
       id: "test-plugin",
@@ -204,32 +204,17 @@ describe("FabriqAdmin", () => {
     // Initially light
     expect(div?.getAttribute("data-fabriq-theme")).toBe("light")
 
-    // Find and click the theme toggle button
-    const toggleBtn = screen.getByRole("button", { name: /toggle theme/i })
-    fireEvent.click(toggleBtn)
+    // Open the footer settings menu
+    fireEvent.click(screen.getByRole("button", { name: /settings/i }))
 
-    expect(div?.getAttribute("data-fabriq-theme")).toBe("dark")
-  })
+    // Select dark theme via the radio item
+    const dark = await screen.findByRole("menuitemradio", { name: /^dark$/i })
+    fireEvent.click(dark)
 
-  it("(theme) clicking theme toggle flips data-fabriq-theme from dark to light", () => {
-    const client = makeFakeClient()
-    const plugin: FabriqAdminPlugin = {
-      id: "test-plugin",
-      name: "Test Plugin",
-      version: "1.0.0",
-      routes: [{ path: "home", element: ListEl }],
-      navItems: [{ label: "Home", to: "home" }],
-    }
-    const { container } = render(
-      <FabriqAdmin client={client} plugins={[plugin]} theme="dark" />
-    )
-    const div = container.querySelector(".fabriq-admin")
-    expect(div?.getAttribute("data-fabriq-theme")).toBe("dark")
-
-    const toggleBtn = screen.getByRole("button", { name: /toggle theme/i })
-    fireEvent.click(toggleBtn)
-
-    expect(div?.getAttribute("data-fabriq-theme")).toBe("light")
+    // Root reflects dark theme
+    await waitFor(() => {
+      expect(document.querySelector(".fabriq-admin")?.getAttribute("data-fabriq-theme")).toBe("dark")
+    })
   })
 
   // -------------------------------------------------------------------------
@@ -255,8 +240,9 @@ describe("FabriqAdmin", () => {
       <FabriqAdmin client={client} plugins={[plugin]} initialPath="entities" />
     )
 
-    const entitiesBtn = screen.getByRole("button", { name: /entities/i })
-    const homeBtn = screen.getByRole("button", { name: /home/i })
+    // Use exact name to distinguish Platform nav buttons from NavEntities "More entities" button
+    const entitiesBtn = screen.getByRole("button", { name: /^entities$/i })
+    const homeBtn = screen.getByRole("button", { name: /^home$/i })
 
     // Active item gets aria-current="page"
     expect(entitiesBtn.getAttribute("aria-current")).toBe("page")

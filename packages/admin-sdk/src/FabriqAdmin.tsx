@@ -19,7 +19,6 @@ import { resolveIcon } from "./icons"
 import { PluginErrorBoundary } from "./PluginErrorBoundary"
 import {
   cn,
-  Button,
   PortalContainerProvider,
   Sidebar,
   SidebarProvider,
@@ -27,17 +26,22 @@ import {
   SidebarInset,
   SidebarContent,
   SidebarHeader,
+  SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarRail,
+  Separator,
 } from "@fabriq/ui"
 import {
   Database,
-  Sun,
-  Moon,
   LayoutDashboard,
 } from "lucide-react"
+import { NavEntities } from "./NavEntities"
+import { NavUser } from "./NavUser"
+import { Breadcrumbs } from "./Breadcrumbs"
 import type { PluginStore, NewRemotePluginSpec } from "./pluginStore"
 import { usePluginManager, type PluginEntry } from "./pluginManager"
 
@@ -164,7 +168,7 @@ export function FabriqAdmin({
     [registry, router.navigate, router.path, pluginEntries, addRemote, removeRemote, reloadRemote],
   )
 
-  const { resolved, setOverride } = useResolvedTheme(theme)
+  const { resolved, override, setOverride } = useResolvedTheme(theme)
 
   const navItems = registry.navItems()
   const activeItem = navItems.find(
@@ -174,9 +178,8 @@ export function FabriqAdmin({
 
   const hasPlugins = registry.all().length > 0
 
-  const toggleTheme = () => {
-    setOverride(resolved === "dark" ? "light" : "dark")
-  }
+  const match = matchRoute(registry.routes(), router.path)
+  const crumbParams = match?.params
 
   return (
     <TenantContext.Provider value={tenantStore ?? null}>
@@ -191,19 +194,23 @@ export function FabriqAdmin({
           <PluginErrorBoundary>
           {hasPlugins ? (
             <SidebarProvider>
-              <Sidebar>
-                {/* Brand row + optional tenant switcher */}
+              <Sidebar collapsible="icon">
                 <SidebarHeader>
-                  <div className="flex items-center gap-2 px-2 py-1">
-                    <Database className="h-5 w-5 text-primary" aria-hidden="true" />
-                    <span className="font-semibold text-sm tracking-tight text-foreground">fabriq</span>
-                  </div>
-                  {tenantStore && <TenantSwitcher store={tenantStore} />}
+                  {tenantStore ? (
+                    <TenantSwitcher store={tenantStore} />
+                  ) : (
+                    <div className="flex items-center gap-2 px-2 py-1">
+                      <Database className="h-5 w-5 text-primary" aria-hidden="true" />
+                      <span className="font-semibold text-sm tracking-tight text-foreground">
+                        fabriq
+                      </span>
+                    </div>
+                  )}
                 </SidebarHeader>
 
-                {/* Nav */}
                 <SidebarContent>
                   <SidebarGroup>
+                    <SidebarGroupLabel>Platform</SidebarGroupLabel>
                     <SidebarMenu>
                       {navItems.map((item) => {
                         const isActive =
@@ -225,55 +232,47 @@ export function FabriqAdmin({
                       })}
                     </SidebarMenu>
                   </SidebarGroup>
+                  <NavEntities />
                 </SidebarContent>
+
+                <SidebarFooter>
+                  <NavUser resolved={resolved} override={override} setOverride={setOverride} />
+                </SidebarFooter>
+
+                <SidebarRail />
               </Sidebar>
 
               <SidebarInset>
-                {/* Header bar */}
-                <header className="flex items-center justify-between px-4 h-14 border-b border-border bg-background shrink-0">
-                  <div className="flex items-center gap-2">
-                    <SidebarTrigger />
-                    <span className="text-sm font-medium text-foreground">{sectionTitle}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={toggleTheme}
-                    aria-label="Toggle theme"
-                    className="h-8 w-8"
-                  >
-                    {resolved === "dark" ? (
-                      <Sun className="h-4 w-4" aria-hidden="true" />
-                    ) : (
-                      <Moon className="h-4 w-4" aria-hidden="true" />
-                    )}
-                  </Button>
+                <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
+                  <SidebarTrigger className="-ml-1" />
+                  <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+                  <Breadcrumbs
+                    sectionLabel={sectionTitle}
+                    sectionTo={activeItem?.to ?? ""}
+                    params={crumbParams}
+                    onNavigate={router.navigate}
+                  />
                 </header>
 
-                {/* Main content */}
-                {(() => {
-                  const match = matchRoute(registry.routes(), router.path)
-                  if (!match) {
-                    return (
-                      <div className="flex-1 overflow-auto p-6">
-                        <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-16">
-                          <LayoutDashboard className="h-10 w-10 text-muted-foreground opacity-40" aria-hidden="true" />
-                          <p className="text-muted-foreground text-sm">Not found</p>
-                        </div>
-                      </div>
-                    )
-                  }
-                  const El = match.route.element as ComponentType<{ params?: Record<string, string> }>
-                  return (
-                    <div className="flex-1 overflow-auto">
-                      <div className="mx-auto w-full max-w-5xl px-8 py-8">
-                        <PluginErrorBoundary resetKey={router.path}>
-                          <El params={match.params} />
-                        </PluginErrorBoundary>
-                      </div>
+                {!match ? (
+                  <div className="flex-1 overflow-auto p-6">
+                    <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-16">
+                      <LayoutDashboard className="h-10 w-10 text-muted-foreground opacity-40" aria-hidden="true" />
+                      <p className="text-muted-foreground text-sm">Not found</p>
                     </div>
-                  )
-                })()}
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-auto">
+                    <div className="mx-auto w-full max-w-5xl px-8 py-8">
+                      <PluginErrorBoundary resetKey={router.path}>
+                        {React.createElement(
+                          match.route.element as ComponentType<{ params?: Record<string, string> }>,
+                          { key: router.path, params: match.params },
+                        )}
+                      </PluginErrorBoundary>
+                    </div>
+                  </div>
+                )}
               </SidebarInset>
             </SidebarProvider>
           ) : (
