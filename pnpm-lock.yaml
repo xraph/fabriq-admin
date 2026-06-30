@@ -35,6 +35,9 @@ importers:
       '@fabriq/plugin-crdt':
         specifier: workspace:*
         version: link:../../plugins/crdt
+      '@fabriq/plugin-distill':
+        specifier: workspace:*
+        version: link:../../plugins/distill
       '@fabriq/plugin-entity-browser':
         specifier: workspace:*
         version: link:../../plugins/entity-browser

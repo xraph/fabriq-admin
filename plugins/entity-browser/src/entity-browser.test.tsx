@@ -85,8 +85,13 @@ describe("entityBrowserPlugin shape", () => {
     expect(entityBrowserPlugin.id).toBe("fabriq.entity-browser")
   })
 
-  it("has exactly 2 routes", () => {
-    expect(entityBrowserPlugin.routes).toHaveLength(2)
+  it("has exactly 3 routes", () => {
+    expect(entityBrowserPlugin.routes).toHaveLength(3)
+  })
+
+  it("has an entities/:type list route", () => {
+    const r = entityBrowserPlugin.routes.find((x) => x.path === "entities/:type")
+    expect(r).toBeDefined()
   })
 
   it("has exactly 1 navItem", () => {

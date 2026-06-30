@@ -16,6 +16,7 @@ import { graphPlugin } from "@fabriq/plugin-graph"
 import { spatialPlugin } from "@fabriq/plugin-spatial"
 import { filesPlugin } from "@fabriq/plugin-files"
 import { crdtPlugin } from "@fabriq/plugin-crdt"
+import { distillPlugin } from "@fabriq/plugin-distill"
 import { pluginsManagerPlugin } from "@fabriq/plugin-plugins-manager"
 import { apiConsolePlugin } from "@fabriq/plugin-api-console"
 import {
@@ -68,6 +69,7 @@ const plugins = [
   spatialPlugin,
   filesPlugin,
   crdtPlugin,
+  distillPlugin,
   pluginsManagerPlugin,
   apiConsolePlugin,
 ]
