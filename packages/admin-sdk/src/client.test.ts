@@ -819,4 +819,29 @@ describe("FabriqClient", () => {
     })
     expect(transport.lastStream?.signal).toBe(controller.signal)
   })
+
+  // -------------------------------------------------------------------------
+  // Raw query (read plane)
+  // -------------------------------------------------------------------------
+
+  it("runQuery — POSTs /query and returns the dynamic result", async () => {
+    const transport = new FakeTransport()
+    const data = {
+      columns: ["id", "name"],
+      rows: [{ id: "p1", name: "Widget" }],
+      rowCount: 1,
+      truncated: false,
+      elapsedMs: 3,
+    }
+    transport.setRequestResponse(data)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.runQuery({ sql: "SELECT id, name FROM product" })
+
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/query")
+    expect(transport.lastRequest?.body).toEqual({ sql: "SELECT id, name FROM product" })
+    expect(result.columns).toEqual(["id", "name"])
+    expect(result.rows[0].name).toBe("Widget")
+  })
 })
