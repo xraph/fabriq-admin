@@ -20,6 +20,7 @@ import { telemetryPlugin } from "@fabriq/plugin-telemetry"
 import { eventsPlugin } from "@fabriq/plugin-events"
 import { projectionsPlugin } from "@fabriq/plugin-projections"
 import { queryPlugin } from "@fabriq/plugin-query"
+import { migrationsPlugin } from "@fabriq/plugin-migrations"
 import { cachePlugin } from "@fabriq/plugin-cache"
 import { filesPlugin } from "@fabriq/plugin-files"
 import { crdtPlugin } from "@fabriq/plugin-crdt"
@@ -81,6 +82,7 @@ const plugins = [
   eventsPlugin,
   projectionsPlugin,
   queryPlugin,
+  migrationsPlugin,
   cachePlugin,
   filesPlugin,
   crdtPlugin,
