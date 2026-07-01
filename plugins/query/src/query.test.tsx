@@ -72,4 +72,39 @@ describe("QueryPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /run/i }))
     expect((await screen.findAllByText(/not configured/i)).length).toBeGreaterThan(0)
   })
+
+  it("renders results as a table with dynamic columns and toggles to JSON", async () => {
+    const { client } = makeClient((o) => {
+      if (o.path.endsWith("/query")) {
+        return {
+          columns: ["id", "name"],
+          rows: [{ id: "p1", name: "Widget" }, { id: "p2", name: null }],
+          rowCount: 2, truncated: false, elapsedMs: 1,
+        }
+      }
+      return {}
+    })
+    renderQuery(client)
+    fireEvent.change(screen.getByLabelText(/sql/i), { target: { value: "SELECT id, name FROM product" } })
+    fireEvent.click(screen.getByRole("button", { name: /run/i }))
+
+    // Table is the default view: a column header per result column.
+    await screen.findByRole("columnheader", { name: "name" })
+    expect(screen.getByText("Widget")).toBeTruthy()
+
+    // Toggle to JSON.
+    fireEvent.click(screen.getByRole("button", { name: /json/i }))
+    await screen.findByText(/"name": "Widget"/)
+  })
+
+  it("shows a friendly parsed message for a 400 error instead of the raw JSON envelope", async () => {
+    const { client } = makeClient(() => {
+      throw new HttpTransportError(400, '{"error":"syntax error at or near \\"SELCT\\""}')
+    })
+    renderQuery(client)
+    fireEvent.change(screen.getByLabelText(/sql/i), { target: { value: "SELCT 1" } })
+    fireEvent.click(screen.getByRole("button", { name: /run/i }))
+    await screen.findByText(/syntax error at or near/)
+    expect(screen.queryByText(/HTTP 400/)).toBeFalsy()
+  })
 })

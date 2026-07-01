@@ -1,4 +1,3 @@
-import { useEffect } from "react"
 import Editor, { loader } from "@monaco-editor/react"
 import * as monaco from "monaco-editor"
 
@@ -24,7 +23,6 @@ export function SqlEditor({
   onChange: (v: string) => void
   onRun?: () => void
 }) {
-  useEffect(() => {}, [])
   return (
     <div className="overflow-hidden rounded-md border">
       <Editor
