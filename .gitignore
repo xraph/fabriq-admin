@@ -7,3 +7,4 @@ dist
 .task-*-report.md
 .fix-report.md
 .p*-report.md
+docs/superpowers/*
