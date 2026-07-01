@@ -274,7 +274,11 @@ export function EntityList({ params }: { params?: { type?: string } } = {}) {
         cell: (info) => (
           <span className="whitespace-nowrap font-mono text-xs">{String(info.getValue() ?? "")}</span>
         ),
-        meta: { headerTitle: "ID" },
+        meta: {
+          headerTitle: "ID",
+          headerClassName: "whitespace-nowrap",
+          cellClassName: "whitespace-nowrap",
+        },
         size: 250,
       },
       ...fields.map((f): ColumnDef<EntityRecord> => {
@@ -290,7 +294,13 @@ export function EntityList({ params }: { params?: { type?: string } } = {}) {
                 <ReferenceCell value={info.getValue()} type={refType} navigate={navigate} />
               )
             : (info) => <CellValue value={info.getValue()} kind={f.kind} />,
-          meta: { headerTitle: titleCase(f.name) },
+          // Keep cells on one line so wide values grow the column and the table
+          // scrolls horizontally (via the scroll wrapper) instead of wrapping.
+          meta: {
+            headerTitle: titleCase(f.name),
+            headerClassName: "whitespace-nowrap",
+            cellClassName: "whitespace-nowrap",
+          },
         }
       }),
     ]
