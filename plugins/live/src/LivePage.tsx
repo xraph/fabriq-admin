@@ -5,6 +5,7 @@ import {
   useTenantContext,
   useTenant,
   HttpTransportError,
+  EntityTypeCombobox,
   type LiveEvent,
   type LiveDeltaEvent,
 } from "@fabriq/admin-sdk"
@@ -16,7 +17,6 @@ import {
   CardContent,
   Badge,
   Button,
-  Input,
   Alert,
   AlertDescription,
   ScrollArea,
@@ -257,12 +257,10 @@ export function LivePage() {
               <label htmlFor="live-entity" className="text-sm font-medium">
                 Entity type
               </label>
-              <Input
+              <EntityTypeCombobox
                 id="live-entity"
-                aria-label="Entity type"
                 value={entity}
-                onChange={(e) => setEntity(e.target.value)}
-                placeholder="product"
+                onChange={setEntity}
                 className="font-mono"
                 disabled={streaming}
               />

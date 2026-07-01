@@ -27,6 +27,11 @@ export interface EntityTypeComboboxProps {
    * only when there is no visible label (avoids double-labelling).
    */
   "aria-label"?: string
+  /**
+   * Disables the input and its trigger button (e.g. while a stream is active).
+   * @default false
+   */
+  disabled?: boolean
 }
 
 /**
@@ -45,6 +50,7 @@ export function EntityTypeCombobox({
   className,
   placeholder = "type…",
   "aria-label": ariaLabel,
+  disabled = false,
 }: EntityTypeComboboxProps) {
   const tenantStore = useTenantContext()
   const tenantId = React.useSyncExternalStore(
@@ -84,6 +90,7 @@ export function EntityTypeCombobox({
         aria-label={ariaLabel}
         placeholder={placeholder}
         className={className}
+        disabled={disabled}
       />
       <ComboboxContent>
         <ComboboxEmpty>No types found.</ComboboxEmpty>

@@ -30,6 +30,7 @@ function renderCombo(
         value={props.value ?? "product"}
         onChange={onChange}
         aria-label="Entity type"
+        disabled={props.disabled}
       />
     </FabriqProvider>,
   )
@@ -80,5 +81,10 @@ describe("EntityTypeCombobox", () => {
     renderCombo({ value: "gadget" }, { reject: true })
     // No crash; the input shows the current value even without a known-types list.
     expect((comboInput() as HTMLInputElement).value).toBe("gadget")
+  })
+
+  it("disables the input when disabled is set", () => {
+    renderCombo({ value: "product", disabled: true })
+    expect((comboInput() as HTMLInputElement).disabled).toBe(true)
   })
 })

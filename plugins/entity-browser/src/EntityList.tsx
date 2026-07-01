@@ -4,10 +4,10 @@ import {
   useFabriqClient,
   useQueryClient,
   usePluginHost,
+  EntityTypeCombobox,
   type EntityRecord,
 } from "@fabriq/admin-sdk"
 import {
-  Input,
   Badge,
   Button,
   Alert,
@@ -153,7 +153,9 @@ export function EntityList({ params }: { params?: { type?: string } } = {}) {
 
   const trimmedType = type.trim()
 
-  // Known dynamic types — rendered as quick-pick chips below the input.
+  // Known dynamic types — used to detect reference columns (see
+  // referenceTypeFor below). The type-selection UI itself is the
+  // EntityTypeCombobox, which fetches its own known-types list.
   const { data: knownTypes } = useFabriqQuery(
     ["entity-types"],
     (c) => c.listEntityTypes(),
@@ -332,17 +334,14 @@ export function EntityList({ params }: { params?: { type?: string } } = {}) {
       {/* Type filter toolbar */}
       <div>
           <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="entity-type-input"
-                aria-label="Entity type"
-                placeholder="Entity type (e.g. order)..."
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-                className="pl-8"
-              />
-            </div>
+            <EntityTypeCombobox
+              id="entity-type-input"
+              value={type}
+              onChange={setType}
+              aria-label="Entity type"
+              className="flex-1"
+              placeholder="Entity type (e.g. order)…"
+            />
             {trimmedType.length > 0 && (
               <Button onClick={() => setCreateOpen(true)} aria-label={`New ${trimmedType}`}>
                 <Plus className="h-4 w-4 mr-1" />
@@ -350,24 +349,6 @@ export function EntityList({ params }: { params?: { type?: string } } = {}) {
               </Button>
             )}
           </div>
-
-          {/* Quick-pick type chips */}
-          {knownTypes && knownTypes.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2" aria-label="Known types">
-              {knownTypes.map((t) => (
-                <Button
-                  key={t}
-                  type="button"
-                  size="sm"
-                  variant={t === trimmedType ? "secondary" : "outline"}
-                  className="h-7 px-2 text-xs"
-                  onClick={() => setType(t)}
-                >
-                  {t}
-                </Button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Create dialog */}

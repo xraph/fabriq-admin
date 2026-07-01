@@ -12,6 +12,29 @@ import {
 } from "@fabriq/admin-sdk"
 import { entityBrowserPlugin, EntityList, EntityDetail, EntityForm } from "./index"
 
+/**
+ * EntityList's type field is an EntityTypeCombobox: a single `role="combobox"`
+ * input (labelled "Entity type") backed by base-ui's Combobox.
+ *
+ * NOTE: plain `fireEvent.change` on the input does NOT reliably commit a
+ * value in jsdom — base-ui's Combobox resets `inputValue` back to the
+ * current *selected* value's label whenever its (memoized) `items` list
+ * changes identity and the input hasn't been marked "dirty" via a real
+ * input event with a matching option, which typing alone doesn't trigger
+ * synchronously here. The reliable, verified interaction is: open the
+ * popup (focus + ArrowDown) and click the option with the exact label —
+ * this is how EntityTypeCombobox.test.tsx itself drives selection. Every
+ * type used below is served from `/entities/types` by each test's fake
+ * transport, so it is always present as a known option.
+ */
+async function selectEntityType(value: string) {
+  const combo = screen.getByRole("combobox", { name: /entity type/i })
+  fireEvent.focus(combo)
+  fireEvent.keyDown(combo, { key: "ArrowDown" })
+  const option = await screen.findByRole("option", { name: new RegExp(`^${value}$`) })
+  fireEvent.click(option)
+}
+
 const ENTITY_A: EntityRecord = { id: "ent-1", type: "node", data: { label: "Alpha", score: 42 } }
 const ENTITY_B: EntityRecord = { id: "ent-2", type: "node", data: { label: "Beta" } }
 const ENTITY_C: EntityRecord = { id: "ent-3", type: "node", data: { label: "Gamma" } }
@@ -142,8 +165,7 @@ describe("EntityList", () => {
     render(
       <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />,
     )
-    const input = screen.getByRole("textbox", { name: /entity type/i })
-    fireEvent.change(input, { target: { value: "node" } })
+    await selectEntityType("node")
     await screen.findByText("ent-1")
     await screen.findByText("ent-2")
   })
@@ -152,6 +174,9 @@ describe("EntityList", () => {
     let resolve!: (v: EntityPage) => void
     const slowTransport: FabriqTransport = {
       async request<T>(reqOpts: { path: string }): Promise<T> {
+        if (reqOpts.path.endsWith("/entities/types")) {
+          return { types: ["node"] } as unknown as T
+        }
         if (reqOpts.path.includes("/entities")) {
           return new Promise<T>((res) => {
             resolve = (page) => res(page as unknown as T)
@@ -165,8 +190,7 @@ describe("EntityList", () => {
     render(
       <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />,
     )
-    const input = screen.getByRole("textbox", { name: /entity type/i })
-    fireEvent.change(input, { target: { value: "node" } })
+    await selectEntityType("node")
     expect(screen.getByText(/loading/i)).toBeTruthy()
     resolve({ items: [ENTITY_A] })
     await screen.findByText("ent-1")
@@ -183,14 +207,16 @@ describe("EntityList", () => {
         queryClient={noRetryQc}
       />,
     )
-    const input = screen.getByRole("textbox", { name: /entity type/i })
-    fireEvent.change(input, { target: { value: "node" } })
+    await selectEntityType("node")
     await screen.findByText(/error/i)
   })
 
   it("shows 'No entities' empty state when query returns zero items", async () => {
     const emptyTransport: FabriqTransport = {
       async request<T>(reqOpts: { path: string }): Promise<T> {
+        if (reqOpts.path.endsWith("/entities/types")) {
+          return { types: ["node"] } as unknown as T
+        }
         if (reqOpts.path.includes("/entities")) {
           const page: EntityPage = { items: [] }
           return page as unknown as T
@@ -203,8 +229,7 @@ describe("EntityList", () => {
     render(
       <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />,
     )
-    const input = screen.getByRole("textbox", { name: /entity type/i })
-    fireEvent.change(input, { target: { value: "node" } })
+    await selectEntityType("node")
     await screen.findByText(/no entities/i)
     expect(screen.queryByText(/enter an entity type/i)).toBeNull()
   })
@@ -241,6 +266,9 @@ describe("EntityList pagination", () => {
       const paginatedTransport: FabriqTransport = {
         async request<T>(reqOpts: { path: string; query?: Record<string, string | number | undefined> }): Promise<T> {
           const { path, query } = reqOpts
+          if (path.endsWith("/entities/types")) {
+            return { types: ["node"] } as unknown as T
+          }
           if (path.includes("/entities") && !path.match(/\/entities\/.+/)) {
             const cursor = query?.cursor
             if (!cursor) {
@@ -259,8 +287,7 @@ describe("EntityList pagination", () => {
       render(
         <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />,
       )
-      const input = screen.getByRole("textbox", { name: /entity type/i })
-      fireEvent.change(input, { target: { value: "node" } })
+      await selectEntityType("node")
       await screen.findByText("ent-1")
       await screen.findByText("ent-2")
       expect(screen.queryByText("ent-3")).toBeNull()
@@ -281,6 +308,9 @@ describe("EntityList pagination", () => {
     const transport: FabriqTransport = {
       async request<T>(reqOpts: { path: string; query?: Record<string, string | number | undefined> }): Promise<T> {
         const { path, query } = reqOpts
+        if (path.endsWith("/entities/types")) {
+          return { types: ["node", "other"] } as unknown as T
+        }
         if (path.includes("/entities") && !path.match(/\/entities\/.+/)) {
           const type = query?.type as string | undefined
           if (type === "node") {
@@ -298,11 +328,10 @@ describe("EntityList pagination", () => {
     render(
       <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />,
     )
-    const input = screen.getByRole("textbox", { name: /entity type/i })
-    fireEvent.change(input, { target: { value: "node" } })
+    await selectEntityType("node")
     await screen.findByText("ent-1")
     await screen.findByText("ent-2")
-    fireEvent.change(input, { target: { value: "other" } })
+    await selectEntityType("other")
     await screen.findByText("ent-3")
     expect(screen.queryByText("ent-1")).toBeNull()
     expect(screen.queryByText("ent-2")).toBeNull()
@@ -315,8 +344,7 @@ describe("EntityList -> EntityDetail navigation", () => {
     render(
       <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />,
     )
-    const input = screen.getByRole("textbox", { name: /entity type/i })
-    fireEvent.change(input, { target: { value: "node" } })
+    await selectEntityType("node")
     const row = await screen.findByText("ent-1")
     fireEvent.click(row)
     await screen.findByText(/42/)
@@ -342,8 +370,7 @@ describe("EntityList -> EntityDetail navigation", () => {
     render(
       <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />,
     )
-    const input = screen.getByRole("textbox", { name: /entity type/i })
-    fireEvent.change(input, { target: { value: "node" } })
+    await selectEntityType("node")
     const row = await screen.findByText("ent-1")
     fireEvent.click(row)
     await screen.findByText(/42/)
@@ -651,9 +678,7 @@ describe("EntityList — create flow", () => {
     const client = new FabriqClient({ baseUrl: "http://test", transport: makeCrudTransport(calls) })
     render(<FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />)
 
-    fireEvent.change(screen.getByRole("textbox", { name: /entity type/i }), {
-      target: { value: "product" },
-    })
+    await selectEntityType("product")
     const newBtn = await screen.findByRole("button", { name: /new product/i })
     fireEvent.click(newBtn)
 
