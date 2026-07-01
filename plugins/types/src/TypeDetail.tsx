@@ -41,8 +41,14 @@ function ConfirmDestructive({
 }) {
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   return (
-    <AlertDialog onOpenChange={() => setText("")}>
+    <AlertDialog
+      onOpenChange={() => {
+        setText("")
+        setError(null)
+      }}
+    >
       <AlertDialogTrigger render={trigger as React.ReactElement} />
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -55,14 +61,22 @@ function ConfirmDestructive({
           </Label>
           <Input id="confirm-word" aria-label="confirm" value={text} onChange={(e) => setText(e.target.value)} />
         </div>
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
             disabled={text !== confirmWord || busy}
             onClick={async () => {
               setBusy(true)
+              setError(null)
               try {
                 await onConfirm()
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Action failed")
               } finally {
                 setBusy(false)
               }

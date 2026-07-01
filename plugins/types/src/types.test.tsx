@@ -73,6 +73,31 @@ it("TypeDetail renders the schema fields", async () => {
   expect(screen.getByText("status")).toBeTruthy()
 })
 
+it("TypeDetail hides write controls when schema.write is absent", async () => {
+  const client = new FabriqClient({
+    baseUrl: "http://x/admin",
+    transport: {
+      async request<T>(o: { path: string }): Promise<T> {
+        if (o.path.endsWith("/entities/types")) return { types: ["order"] } as unknown as T
+        if (o.path.endsWith("/capabilities")) return { capabilities: {} } as unknown as T
+        if (o.path.includes("/schema")) {
+          return { type: "order", fields: [
+            { name: "total", kind: "number", required: true },
+          ] } as unknown as T
+        }
+        return {} as T
+      },
+      async rawRequest() { return { status: 200, headers: {}, body: "" } as any },
+      async *stream() {},
+      async fetchBlob() { return { blob: new Blob(), headers: {}, status: 200 } as any },
+    } as unknown as FabriqTransport,
+  })
+  render(<FabriqAdmin client={client} plugins={[typesPlugin]} initialPath="types/order" />)
+  await screen.findByText("total")
+  expect(screen.queryByRole("button", { name: /delete type/i })).toBeNull()
+  expect(screen.queryByRole("button", { name: /add field/i })).toBeNull()
+})
+
 it("create-type dialog submits createEntityType with translated columns", async () => {
   const calls: any[] = []
   const client = new FabriqClient({
