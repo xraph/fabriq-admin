@@ -46,3 +46,59 @@ describe("TypeList", () => {
     expect(screen.getByRole("button", { name: /new type/i })).toBeTruthy()
   })
 })
+
+it("TypeDetail renders the schema fields", async () => {
+  // fakeTransport returns {type, fields:[]} for /schema; extend it to return fields:
+  const client = new FabriqClient({
+    baseUrl: "http://x/admin",
+    transport: {
+      async request<T>(o: { path: string }): Promise<T> {
+        if (o.path.endsWith("/entities/types")) return { types: ["order"] } as unknown as T
+        if (o.path.endsWith("/capabilities")) return { capabilities: {} } as unknown as T
+        if (o.path.includes("/schema")) {
+          return { type: "order", fields: [
+            { name: "total", kind: "number", required: true },
+            { name: "status", kind: "string", required: false },
+          ] } as unknown as T
+        }
+        return {} as T
+      },
+      async rawRequest() { return { status: 200, headers: {}, body: "" } as any },
+      async *stream() {},
+      async fetchBlob() { return { blob: new Blob(), headers: {}, status: 200 } as any },
+    } as unknown as FabriqTransport,
+  })
+  render(<FabriqAdmin client={client} plugins={[typesPlugin]} initialPath="types/order" />)
+  await screen.findByText("total")
+  expect(screen.getByText("status")).toBeTruthy()
+})
+
+it("create-type dialog submits createEntityType with translated columns", async () => {
+  const calls: any[] = []
+  const client = new FabriqClient({
+    baseUrl: "http://x/admin",
+    transport: {
+      async request<T>(o: any): Promise<T> {
+        calls.push(o)
+        if (o.path.endsWith("/entities/types")) return { types: [] } as unknown as T
+        if (o.path.endsWith("/capabilities")) return { capabilities: { "schema.write": true } } as unknown as T
+        if (o.path.endsWith("/schema") && o.method === "POST") return { type: "invoice", fields: [] } as unknown as T
+        if (o.path.includes("/schema")) return { type: "invoice", fields: [] } as unknown as T
+        return {} as T
+      },
+      async rawRequest() { return { status: 200, headers: {}, body: "" } as any },
+      async *stream() {},
+      async fetchBlob() { return { blob: new Blob(), headers: {}, status: 200 } as any },
+    } as unknown as FabriqTransport,
+  })
+  render(<FabriqAdmin client={client} plugins={[typesPlugin]} initialPath="types" />)
+  fireEvent.click(await screen.findByRole("button", { name: /new type/i }))
+  fireEvent.change(await screen.findByLabelText(/type name/i), { target: { value: "invoice" } })
+  fireEvent.change(screen.getByLabelText(/field name/i), { target: { value: "amount" } })
+  fireEvent.click(screen.getByRole("button", { name: /^create$/i }))
+  await waitFor(() => {
+    const post = calls.find((c) => c.method === "POST" && c.path.endsWith("/schema"))
+    expect(post).toBeTruthy()
+    expect(post.body).toMatchObject({ type: "invoice", columns: [{ name: "amount" }] })
+  })
+})
