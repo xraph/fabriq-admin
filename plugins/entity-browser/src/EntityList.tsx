@@ -315,6 +315,9 @@ export function EntityList({ params }: { params?: { type?: string } } = {}) {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getRowId: (row) => row.id,
+    // Live column resizing (drag a header border; double-click to reset).
+    columnResizeMode: "onChange",
+    defaultColumn: { minSize: 60 },
   })
 
   const showGrid = trimmedType.length > 0 && !isError && (items.length > 0 || isFirstLoad)
@@ -450,7 +453,10 @@ export function EntityList({ params }: { params?: { type?: string } } = {}) {
                 headerBackground: true,
                 headerBorder: true,
                 headerSticky: true,
-                width: "auto",
+                // Fixed layout so columns honor their (resizable) widths and
+                // truncate overflow; the scroll area handles wide tables.
+                width: "fixed",
+                columnsResizable: true,
               }}
               tableClassNames={{ headerSticky: "sticky top-0 z-20 bg-background" }}
               emptyMessage="No entities."
