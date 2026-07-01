@@ -18,6 +18,7 @@ import { spatialPlugin } from "@fabriq/plugin-spatial"
 import { telemetryPlugin } from "@fabriq/plugin-telemetry"
 import { eventsPlugin } from "@fabriq/plugin-events"
 import { projectionsPlugin } from "@fabriq/plugin-projections"
+import { queryPlugin } from "@fabriq/plugin-query"
 import { cachePlugin } from "@fabriq/plugin-cache"
 import { filesPlugin } from "@fabriq/plugin-files"
 import { crdtPlugin } from "@fabriq/plugin-crdt"
@@ -77,6 +78,7 @@ const plugins = [
   telemetryPlugin,
   eventsPlugin,
   projectionsPlugin,
+  queryPlugin,
   cachePlugin,
   filesPlugin,
   crdtPlugin,

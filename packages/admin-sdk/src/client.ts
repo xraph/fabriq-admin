@@ -140,6 +140,21 @@ export interface CommandResult {
   eventId: string
 }
 
+/** A raw read-only SQL query against the tenant's relational store. */
+export interface RawQueryInput {
+  sql: string
+  args?: unknown[]
+}
+
+/** The dynamic result of a raw query — columns/rows are shaped by the SQL itself. */
+export interface RawQueryResult {
+  columns: string[]
+  rows: Array<Record<string, unknown>>
+  rowCount: number
+  truncated: boolean
+  elapsedMs: number
+}
+
 /** The agent write allowlist (deny-by-default): entity name → permitted ops. */
 export interface AgentWritePolicy {
   allow: Record<string, string[]>
@@ -880,6 +895,23 @@ export class FabriqClient {
       method: "POST",
       path: `${this.baseUrl}/commands/batch`,
       body: { commands },
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Raw query (read plane)
+  // -------------------------------------------------------------------------
+
+  /**
+   * POST /query — run a read-only raw SQL query for the current tenant. Throws
+   * an HttpTransportError with `.status` 400 (non-read-only / SQL error) or 501
+   * (relational store not configured).
+   */
+  runQuery(input: RawQueryInput): Promise<RawQueryResult> {
+    return this.transport.request<RawQueryResult>({
+      method: "POST",
+      path: `${this.baseUrl}/query`,
+      body: input,
     })
   }
 

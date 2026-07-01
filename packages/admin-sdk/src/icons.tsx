@@ -18,6 +18,7 @@ import {
   SquareTerminal,
   Workflow,
   DatabaseZap,
+  Database,
   type LucideIcon,
 } from "lucide-react"
 
@@ -74,6 +75,8 @@ export function resolveIcon(name?: string): LucideIcon {
       return Workflow
     case "cache":
       return DatabaseZap
+    case "query":
+      return Database
     default:
       return Circle
   }
