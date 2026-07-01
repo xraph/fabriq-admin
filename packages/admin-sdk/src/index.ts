@@ -48,3 +48,11 @@ export type { BreadcrumbsProps } from "./Breadcrumbs"
 // the planned /watch SSE endpoint but are NOT backed by the Phase 1 admin API —
 // see the doc comment on FabriqClient.watch() for details.
 // ----------------------------------------------------------
+
+export {
+  createVirtualAdapter,
+  createHashAdapter,
+  createPathAdapter,
+} from "./routerAdapters"
+export type { RouterAdapter, PathAdapterOptions, RouterBridge } from "./routerAdapters"
+export type { RoutingStrategy } from "./FabriqAdmin"

@@ -15,6 +15,7 @@ import { recallPlugin } from "@fabriq/plugin-recall"
 import { livePlugin } from "@fabriq/plugin-live"
 import { graphPlugin } from "@fabriq/plugin-graph"
 import { spatialPlugin } from "@fabriq/plugin-spatial"
+import { telemetryPlugin } from "@fabriq/plugin-telemetry"
 import { filesPlugin } from "@fabriq/plugin-files"
 import { crdtPlugin } from "@fabriq/plugin-crdt"
 import { distillPlugin } from "@fabriq/plugin-distill"
@@ -69,6 +70,7 @@ const plugins = [
   livePlugin,
   graphPlugin,
   spatialPlugin,
+  telemetryPlugin,
   filesPlugin,
   crdtPlugin,
   distillPlugin,
@@ -78,20 +80,25 @@ const plugins = [
 
 export function App() {
   return (
-    <FabriqAdmin
-      client={client}
-      plugins={plugins}
-      theme="system"
-      store={store}
-      tenantStore={tenantStore}
-      loadRemote={(spec) =>
-        loadRemotePlugin({
-          url: spec.url,
-          scope: spec.scope,
-          module: spec.module,
-          federationRuntime,
-        })
-      }
-    />
+    <>
+      {/* routing="path": real URLs; production static hosting needs an SPA rewrite to index.html (Vite dev already SPA-falls-back). */}
+      <FabriqAdmin
+        client={client}
+        plugins={plugins}
+        theme="system"
+        store={store}
+        tenantStore={tenantStore}
+        loadRemote={(spec) =>
+          loadRemotePlugin({
+            url: spec.url,
+            scope: spec.scope,
+            module: spec.module,
+            federationRuntime,
+          })
+        }
+        routing="path"
+        path="/"
+      />
+    </>
   )
 }
