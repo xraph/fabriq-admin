@@ -1,4 +1,3 @@
-import { useState } from "react"
 import type { PluginRoute } from "./plugin"
 
 // ---------------------------------------------------------------------------
@@ -52,28 +51,45 @@ export function matchRoute(
 }
 
 // ---------------------------------------------------------------------------
-// useInternalRouter
+// RouterState + hooks
 // ---------------------------------------------------------------------------
+
+import { useCallback, useRef, useSyncExternalStore } from "react"
+import type { RouterAdapter } from "./routerAdapters"
+import { createVirtualAdapter } from "./routerAdapters"
 
 export interface RouterState {
   path: string
-  navigate(to: string): void
+  navigate(to: string, opts?: { replace?: boolean }): void
   basePath: string
 }
 
 /**
- * Tiny internal router backed by React state.
- * No History API — safe to use in SSR and embedded contexts.
+ * Drives RouterState from a RouterAdapter. The adapter (URL, hash, or memory)
+ * is the source of truth; useSyncExternalStore keeps React in sync.
+ * The adapter reference MUST be stable across renders (memoize it).
+ */
+export function useRouter(adapter: RouterAdapter, basePath: string): RouterState {
+  const path = useSyncExternalStore(adapter.subscribe, adapter.read, () => "")
+  const navigate = useCallback(
+    (to: string, opts?: { replace?: boolean }) => {
+      if (opts?.replace) adapter.replace(to)
+      else adapter.push(to)
+    },
+    [adapter],
+  )
+  return { path, navigate, basePath }
+}
+
+/**
+ * Backward-compatible in-memory router. Now a thin wrapper over a virtual
+ * adapter + useRouter. Safe for SSR and embedded contexts (no History API).
  */
 export function useInternalRouter(
   initialPath = "",
   basePath = "/admin",
 ): RouterState {
-  const [path, setPath] = useState(initialPath)
-
-  return {
-    path,
-    navigate: setPath,
-    basePath,
-  }
+  const ref = useRef<RouterAdapter | null>(null)
+  if (ref.current === null) ref.current = createVirtualAdapter(initialPath)
+  return useRouter(ref.current, basePath)
 }

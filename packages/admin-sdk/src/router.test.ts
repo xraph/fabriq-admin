@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { renderHook, act } from "@testing-library/react"
-import { matchRoute, useInternalRouter } from "./router"
+import { matchRoute, useInternalRouter, useRouter } from "./router"
 import type { PluginRoute } from "./plugin"
+import { createVirtualAdapter } from "./routerAdapters"
 
 // ---------------------------------------------------------------------------
 // Dummy components — never rendered, just identity values for route elements
@@ -125,5 +126,37 @@ describe("useInternalRouter", () => {
     const { result } = renderHook(() => useInternalRouter())
     expect(result.current.path).toBe("")
     expect(result.current.basePath).toBe("/admin")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// useRouter
+// ---------------------------------------------------------------------------
+
+describe("useRouter", () => {
+  it("reads the adapter's path and updates on navigate", () => {
+    const adapter = createVirtualAdapter("entities")
+    const { result } = renderHook(() => useRouter(adapter, "/admin"))
+    expect(result.current.path).toBe("entities")
+    act(() => result.current.navigate("search"))
+    expect(result.current.path).toBe("search")
+    expect(result.current.basePath).toBe("/admin")
+  })
+
+  it("navigate(to, { replace: true }) calls adapter.replace", () => {
+    const adapter = createVirtualAdapter("")
+    const calls: string[] = []
+    const spy = { ...adapter, replace: (p: string) => { calls.push(p); adapter.replace(p) } }
+    const { result } = renderHook(() => useRouter(spy, "/admin"))
+    act(() => result.current.navigate("graph", { replace: true }))
+    expect(calls).toEqual(["graph"])
+    expect(result.current.path).toBe("graph")
+  })
+
+  it("re-renders when the adapter changes externally", () => {
+    const adapter = createVirtualAdapter("")
+    const { result } = renderHook(() => useRouter(adapter, "/admin"))
+    act(() => adapter.push("files"))
+    expect(result.current.path).toBe("files")
   })
 })
