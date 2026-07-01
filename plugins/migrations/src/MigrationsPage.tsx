@@ -5,6 +5,7 @@ import {
   useConfirm,
   HttpTransportError,
   type MigrationJob,
+  type MigrationScaffold,
 } from "@fabriq/admin-sdk"
 import {
   Button,
@@ -13,6 +14,12 @@ import {
   AlertTitle,
   AlertDescription,
   Textarea,
+  Input,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
 } from "@fabriq/ui"
 
 type Tab = "migrations" | "drift" | "ddl"
@@ -89,6 +96,7 @@ function MigrationsTab({ canAdmin }: { canAdmin: boolean }) {
   )
   const [job, setJob] = useState<MigrationJob | null>(null)
   const [runErr, setRunErr] = useState<string | null>(null)
+  const [scaffoldOpen, setScaffoldOpen] = useState(false)
   // Stop polling if the page unmounts (tab switch / navigation).
   const mounted = useRef(true)
   useEffect(() => () => { mounted.current = false }, [])
@@ -152,6 +160,10 @@ function MigrationsTab({ canAdmin }: { canAdmin: boolean }) {
           <Button size="sm" variant="outline" onClick={() => run("down")} disabled={job?.state === "running"}>
             Rollback last
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setScaffoldOpen(true)}>
+            Scaffold migration
+          </Button>
+          <ScaffoldDialog open={scaffoldOpen} onOpenChange={setScaffoldOpen} />
         </div>
       )}
 
@@ -242,17 +254,141 @@ function DriftTab() {
               <td className="p-2 font-mono">{e.table}</td>
               <td className="p-2">{e.dynamic ? "yes" : "no"}</td>
               <td className="p-2">
-                <Badge variant={e.inSync ? "secondary" : "destructive"}>
-                  {e.inSync ? "in sync" : "drift"}
+                <Badge variant={e.inSync && !e.error ? "secondary" : "destructive"}>
+                  {e.error ? "error" : e.inSync ? "in sync" : "drift"}
                 </Badge>
               </td>
-              <td className="p-2 font-mono text-destructive">{e.missing.join(", ") || "—"}</td>
-              <td className="p-2 font-mono text-muted-foreground">{e.extra.join(", ") || "—"}</td>
+              {e.error ? (
+                <td className="p-2 font-mono text-destructive" colSpan={2}>
+                  {e.error}
+                </td>
+              ) : (
+                <>
+                  <td className="p-2 font-mono text-destructive">{e.missing.join(", ") || "—"}</td>
+                  <td className="p-2 font-mono text-muted-foreground">{e.extra.join(", ") || "—"}</td>
+                </>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  )
+}
+
+/** A 14-digit timestamp version, the convention for migration filenames. */
+function defaultVersion(): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+}
+
+function ScaffoldDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+}) {
+  const client = useFabriqClient()
+  const [name, setName] = useState("")
+  const [version, setVersion] = useState("")
+  const [result, setResult] = useState<MigrationScaffold | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  // Seed a fresh default version and clear prior output each time it opens.
+  useEffect(() => {
+    if (open) {
+      setVersion(defaultVersion())
+      setResult(null)
+      setError(null)
+      setCopied(false)
+    }
+  }, [open])
+
+  async function generate() {
+    setError(null)
+    setCopied(false)
+    try {
+      const s = await client.migrationScaffold(name.trim(), version.trim())
+      setResult(s)
+    } catch (e) {
+      setResult(null)
+      setError(errMsg(e))
+    }
+  }
+
+  async function copy() {
+    if (!result) return
+    try {
+      await navigator.clipboard.writeText(result.content)
+      setCopied(true)
+    } catch {
+      /* clipboard unavailable — the user can still select the text manually */
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Scaffold a migration</DialogTitle>
+          <DialogDescription>
+            Generates a Go migration file skeleton. Nothing runs — save the output under
+            migrations/ and register it in the migration group.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1">
+            <label className="text-xs text-muted-foreground" htmlFor="scaffold-name">
+              name (slug)
+            </label>
+            <Input
+              id="scaffold-name"
+              placeholder="add_widget_table"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1">
+            <label className="text-xs text-muted-foreground" htmlFor="scaffold-version">
+              version
+            </label>
+            <Input
+              id="scaffold-version"
+              placeholder="20260701120000"
+              value={version}
+              onChange={(e) => setVersion(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={generate} disabled={!name.trim() || !version.trim()}>
+              Generate
+            </Button>
+            {result && (
+              <Button size="sm" variant="outline" onClick={copy}>
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            )}
+          </div>
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>Scaffold failed</AlertTitle>
+              <AlertDescription className="font-mono text-xs">{error}</AlertDescription>
+            </Alert>
+          )}
+          {result && (
+            <div className="grid gap-1">
+              <div className="font-mono text-xs text-muted-foreground">{result.filename}</div>
+              <pre className="max-h-80 overflow-auto rounded-md border bg-muted p-3 font-mono text-xs">
+                {result.content}
+              </pre>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
