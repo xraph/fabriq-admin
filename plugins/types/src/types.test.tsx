@@ -102,3 +102,63 @@ it("create-type dialog submits createEntityType with translated columns", async 
     expect(post.body).toMatchObject({ type: "invoice", columns: [{ name: "amount" }] })
   })
 })
+
+it("delete-type is gated behind a typed confirm and calls deleteEntityType", async () => {
+  const calls: any[] = []
+  const client = new FabriqClient({
+    baseUrl: "http://x/admin",
+    transport: {
+      async request<T>(o: any): Promise<T> {
+        calls.push(o)
+        if (o.path.endsWith("/entities/types")) return { types: ["order"] } as unknown as T
+        if (o.path.endsWith("/capabilities")) return { capabilities: { "schema.write": true } } as unknown as T
+        if (o.path.includes("/schema")) return { type: "order", fields: [{ name: "total", kind: "number", required: true }] } as unknown as T
+        return {} as T
+      },
+      async rawRequest() { return { status: 200, headers: {}, body: "" } as any },
+      async *stream() {},
+      async fetchBlob() { return { blob: new Blob(), headers: {}, status: 200 } as any },
+    } as unknown as FabriqTransport,
+  })
+  render(<FabriqAdmin client={client} plugins={[typesPlugin]} initialPath="types/order" />)
+  fireEvent.click(await screen.findByRole("button", { name: /delete type/i }))
+  const confirm = await screen.findByLabelText(/type .*confirm|confirm/i)
+  // Destructive button disabled until the typed name matches:
+  const del = screen.getByRole("button", { name: /^delete$/i })
+  expect(del).toHaveProperty("disabled", true)
+  fireEvent.change(confirm, { target: { value: "order" } })
+  fireEvent.click(screen.getByRole("button", { name: /^delete$/i }))
+  await waitFor(() => {
+    const req = calls.find((c) => c.method === "DELETE" && c.path.endsWith("/schema/order"))
+    expect(req).toBeTruthy()
+    expect(req.query).toMatchObject({ confirm: "order" })
+  })
+})
+
+it("drop-field calls dropEntityField with confirm after typed match", async () => {
+  const calls: any[] = []
+  const client = new FabriqClient({
+    baseUrl: "http://x/admin",
+    transport: {
+      async request<T>(o: any): Promise<T> {
+        calls.push(o)
+        if (o.path.endsWith("/entities/types")) return { types: ["order"] } as unknown as T
+        if (o.path.endsWith("/capabilities")) return { capabilities: { "schema.write": true } } as unknown as T
+        if (o.path.includes("/schema")) return { type: "order", fields: [{ name: "total", kind: "number", required: true }] } as unknown as T
+        return {} as T
+      },
+      async rawRequest() { return { status: 200, headers: {}, body: "" } as any },
+      async *stream() {},
+      async fetchBlob() { return { blob: new Blob(), headers: {}, status: 200 } as any },
+    } as unknown as FabriqTransport,
+  })
+  render(<FabriqAdmin client={client} plugins={[typesPlugin]} initialPath="types/order" />)
+  fireEvent.click(await screen.findByRole("button", { name: /drop .*total|drop field/i }))
+  fireEvent.change(await screen.findByLabelText(/confirm/i), { target: { value: "total" } })
+  fireEvent.click(screen.getByRole("button", { name: /^drop$/i }))
+  await waitFor(() => {
+    const req = calls.find((c) => c.method === "DELETE" && c.path.endsWith("/schema/order/fields/total"))
+    expect(req).toBeTruthy()
+    expect(req.query).toMatchObject({ confirm: "total" })
+  })
+})
