@@ -10,6 +10,7 @@ import {
 } from "@fabriq/admin-sdk"
 import { overviewPlugin } from "@fabriq/plugin-overview"
 import { entityBrowserPlugin } from "@fabriq/plugin-entity-browser"
+import { typesPlugin } from "@fabriq/plugin-types"
 import { searchPlugin } from "@fabriq/plugin-search"
 import { recallPlugin } from "@fabriq/plugin-recall"
 import { livePlugin } from "@fabriq/plugin-live"
@@ -70,6 +71,7 @@ const store = compositePluginStore({
 const plugins = [
   overviewPlugin,
   entityBrowserPlugin,
+  typesPlugin,
   searchPlugin,
   recallPlugin,
   livePlugin,

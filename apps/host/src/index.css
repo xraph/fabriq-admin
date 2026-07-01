@@ -8,6 +8,7 @@
 @source "../../../packages/ui/src";
 @source "../../../packages/admin-sdk/src";
 @source "../../../plugins/entity-browser/src";
+@source "../../../plugins/types/src";
 @source "../../../plugins/plugins-manager/src";
 @source "../../../plugins/telemetry/src";
 @source "../../../apps/remote-example/src";
