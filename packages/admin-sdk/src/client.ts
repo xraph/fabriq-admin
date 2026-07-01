@@ -237,6 +237,32 @@ export interface EntitySchema {
   fields: EntityField[]
 }
 
+/** Column descriptor used when creating or extending a dynamic entity type's schema. */
+export interface SchemaColumnInput {
+  name: string
+  kind: string
+  required: boolean
+  default?: string
+}
+
+/** Index descriptor used when creating or extending a dynamic entity type's schema. */
+export interface SchemaIndexInput {
+  name: string
+  columns: string[]
+  unique?: boolean
+}
+
+const SCHEMA_DEFAULT_NUM = /^-?\d+(\.\d+)?$/
+const SCHEMA_DEFAULT_STR = /^'[^']*'$/
+
+/** Client-side mirror of the server's column-default allowlist. */
+export function isValidSchemaDefault(s: string): boolean {
+  if (s === "") return true
+  const lower = s.toLowerCase()
+  if (lower === "true" || lower === "false" || lower === "null" || lower === "now()") return true
+  return SCHEMA_DEFAULT_NUM.test(s) || SCHEMA_DEFAULT_STR.test(s)
+}
+
 /**
  * Wire-format representation of a remote plugin as returned/accepted by the
  * admin API. Named separately from pluginStore.RemotePluginSpec to avoid a
@@ -751,6 +777,59 @@ export class FabriqClient {
       method: "GET",
       path: `${this.baseUrl}/schema`,
       query: { type },
+    })
+  }
+
+  /** POST /schema — define a new dynamic entity type's schema */
+  createEntityType(input: {
+    type: string
+    columns: SchemaColumnInput[]
+    indexes?: SchemaIndexInput[]
+  }): Promise<EntitySchema> {
+    return this.transport.request<EntitySchema>({
+      method: "POST",
+      path: `${this.baseUrl}/schema`,
+      body: input,
+    })
+  }
+
+  /** POST /schema/:type/fields — add columns (and optional indexes) to an existing entity type */
+  addEntityFields(
+    type: string,
+    columns: SchemaColumnInput[],
+    indexes?: SchemaIndexInput[],
+  ): Promise<EntitySchema> {
+    return this.transport.request<EntitySchema>({
+      method: "POST",
+      path: `${this.baseUrl}/schema/${encodeURIComponent(type)}/fields`,
+      body: { columns, indexes },
+    })
+  }
+
+  /** POST /schema/:type/rename-field — rename a column on an existing entity type */
+  renameEntityField(type: string, from: string, to: string): Promise<void> {
+    return this.transport.request<void>({
+      method: "POST",
+      path: `${this.baseUrl}/schema/${encodeURIComponent(type)}/rename-field`,
+      body: { from, to },
+    })
+  }
+
+  /** DELETE /schema/:type/fields/:column?confirm=<column> — drop a column from an entity type */
+  dropEntityField(type: string, column: string): Promise<void> {
+    return this.transport.request<void>({
+      method: "DELETE",
+      path: `${this.baseUrl}/schema/${encodeURIComponent(type)}/fields/${encodeURIComponent(column)}`,
+      query: { confirm: column },
+    })
+  }
+
+  /** DELETE /schema/:type?confirm=<type> — drop a dynamic entity type entirely */
+  deleteEntityType(type: string): Promise<void> {
+    return this.transport.request<void>({
+      method: "DELETE",
+      path: `${this.baseUrl}/schema/${encodeURIComponent(type)}`,
+      query: { confirm: type },
     })
   }
 
