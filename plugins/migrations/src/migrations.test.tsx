@@ -20,6 +20,12 @@ function makeClient(caps: string[], opts?: { ddlError?: boolean }) {
     if (p.includes("/migrations/jobs/")) {
       return { id: "j1", kind: "up", state: "done", names: ["outbox"], startedAt: "t" }
     }
+    if (p.includes("/migrations/scaffold")) {
+      return {
+        filename: "migrations/0099_add_widget.go",
+        content: "package migrations\n\n// scaffolded add_widget",
+      }
+    }
     if (p.endsWith("/schema/ddl")) {
       if (opts?.ddlError) throw new HttpTransportError(400, '{"error":"boom ddl error"}')
       return { ok: true, executed: "CREATE TABLE z (id text)" }
@@ -39,6 +45,7 @@ function makeClient(caps: string[], opts?: { ddlError?: boolean }) {
       return {
         entities: [
           { entity: "product", table: "ds_products", dynamic: true, inSync: false, missing: ["price"], extra: [] },
+          { entity: "broken", table: "ds_broken", dynamic: true, inSync: false, missing: [], extra: [], error: "relation \"ds_broken\" does not exist" },
         ],
       }
     }
@@ -85,8 +92,32 @@ describe("MigrationsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^drift$/i }))
     await screen.findByText("product")
     expect(screen.getByText("ds_products")).toBeTruthy()
-    expect(screen.getByText("drift")).toBeTruthy() // inSync:false badge
+    expect(screen.getAllByText("drift").length).toBeGreaterThan(0) // inSync:false badge
     expect(screen.getByText("price")).toBeTruthy() // missing column
+  })
+
+  it("Drift tab surfaces a per-entity introspection error", async () => {
+    renderMigrations([])
+    await screen.findByText("202606120001")
+    fireEvent.click(screen.getByRole("button", { name: /^drift$/i }))
+    await screen.findByText("broken")
+    // Errored entity shows the "error" badge + the verbatim message (no whole-report abort).
+    expect(screen.getByText("error")).toBeTruthy()
+    expect(screen.getByText(/relation "ds_broken" does not exist/i)).toBeTruthy()
+    // The healthy entity still renders alongside it.
+    expect(screen.getByText("product")).toBeTruthy()
+  })
+
+  it("Scaffold migration → generate → shows the generated Go file", async () => {
+    renderMigrations(["schema.admin"])
+    await screen.findByText("202606120001")
+    fireEvent.click(screen.getByRole("button", { name: /scaffold migration/i }))
+    // Dialog opens with a name field; fill it and generate.
+    const nameInput = await screen.findByLabelText(/name \(slug\)/i)
+    fireEvent.change(nameInput, { target: { value: "add_widget" } })
+    fireEvent.click(screen.getByRole("button", { name: /^generate$/i }))
+    await screen.findByText("migrations/0099_add_widget.go")
+    expect(screen.getByText(/scaffolded add_widget/i)).toBeTruthy()
   })
 
   it("Ad-hoc DDL panel renders behind the gate", async () => {

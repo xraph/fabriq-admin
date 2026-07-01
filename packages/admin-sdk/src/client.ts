@@ -194,6 +194,8 @@ export interface DriftEntity {
   inSync: boolean
   missing: string[]
   extra: string[]
+  /** Set when this entity's physical table could not be introspected. */
+  error?: string
 }
 
 export interface SchemaDriftResult {
