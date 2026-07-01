@@ -47,7 +47,7 @@ function fmtCell(v: unknown): string {
 
 export function QueryPage() {
   const client = useFabriqClient()
-  const [sql, setSql] = useState("SELECT * FROM product LIMIT 20")
+  const [sql, setSql] = useState("SELECT * FROM products LIMIT 20")
   const [result, setResult] = useState<RawQueryResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notConfigured, setNotConfigured] = useState(false)
@@ -75,6 +75,12 @@ export function QueryPage() {
       help.accessor((row) => row[col], {
         id: col,
         header: col,
+        // Keep cells on one line so wide values grow the column (and the table
+        // scrolls horizontally) instead of wrapping and squeezing everything.
+        meta: {
+          headerClassName: "whitespace-nowrap",
+          cellClassName: "whitespace-nowrap",
+        },
         cell: (info) => (
           <span className={info.getValue() == null ? "text-muted-foreground" : ""}>
             {fmtCell(info.getValue())}
@@ -149,9 +155,18 @@ export function QueryPage() {
             </Button>
           </div>
           {view === "table" ? (
-            <DataGrid table={table} recordCount={result.rows.length}>
+            <DataGrid
+              table={table}
+              recordCount={result.rows.length}
+              tableLayout={{ width: "auto" }}
+            >
               <DataGridContainer>
-                <DataGridTable />
+                {/* Arbitrary SQL results can be wider than the screen — size
+                    columns to content (width: "auto") and scroll horizontally
+                    rather than clipping, squeezing, or overlapping columns. */}
+                <div className="overflow-x-auto">
+                  <DataGridTable />
+                </div>
               </DataGridContainer>
             </DataGrid>
           ) : (
