@@ -23,6 +23,7 @@ import {
   type RouterBridge,
 } from "./routerAdapters"
 import { useResolvedTheme, type ThemeProp, type ResolvedTheme } from "./theme"
+import { ConfirmProvider } from "./confirm"
 import { resolveIcon } from "./icons"
 import { PluginErrorBoundary } from "./PluginErrorBoundary"
 import {
@@ -233,6 +234,7 @@ export function FabriqAdmin({
           data-fabriq-theme={resolved}
         >
           <PortalContainerProvider container={rootEl}>
+          <ConfirmProvider>
           <PluginErrorBoundary>
           {hasPlugins ? (
             <SidebarProvider>
@@ -307,7 +309,7 @@ export function FabriqAdmin({
                   </div>
                 ) : (
                   <div className="flex-1 overflow-auto">
-                    <div className="mx-auto w-full max-w-5xl px-8 py-8">
+                    <div className="mx-auto w-full max-w-[1600px] px-8 py-8">
                       <PluginErrorBoundary resetKey={router.path}>
                         {React.createElement(
                           match.route.element as ComponentType<{ params?: Record<string, string> }>,
@@ -323,6 +325,7 @@ export function FabriqAdmin({
             <EmptyState />
           )}
           </PluginErrorBoundary>
+          </ConfirmProvider>
           </PortalContainerProvider>
         </div>
       </PluginHostContext.Provider>

@@ -11,6 +11,9 @@ export default defineConfig({
       "virtual:__federation__": fileURLToPath(
         new URL("./src/test/federationStub.ts", import.meta.url),
       ),
+      // @fabriq/ui source uses the shadcn "@/..." convention; map "@" to the ui
+      // package src so vitest can resolve its internal modules.
+      "@": fileURLToPath(new URL("../../packages/ui/src", import.meta.url)),
     },
   },
   test: {

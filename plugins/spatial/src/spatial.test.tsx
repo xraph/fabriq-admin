@@ -105,8 +105,16 @@ describe("SpatialPage — search", () => {
     fireEvent.change(screen.getByLabelText("Limit"), { target: { value: "25" } })
     fireEvent.click(screen.getByRole("button", { name: /search/i }))
 
-    await waitFor(() => expect(request).toHaveBeenCalled())
-    const arg = request.mock.calls[0][0]
+    // The entity-type combobox fetches GET /entities/types on mount, so wait for
+    // the spatial call specifically rather than the first request.
+    await waitFor(() =>
+      expect(
+        request.mock.calls.some((c) => /\/spatial\/within$/.test(c[0].path)),
+      ).toBe(true),
+    )
+    const arg = request.mock.calls.find((c) =>
+      /\/spatial\/within$/.test(c[0].path),
+    )![0]
     expect(arg.method?.toUpperCase()).toBe("POST")
     expect(arg.path).toBe("http://test/spatial/within")
     // radius converted km → metres

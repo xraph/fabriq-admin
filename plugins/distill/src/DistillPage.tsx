@@ -291,7 +291,7 @@ function DigestNodeRow({ node, depth }: DigestNodeRowProps) {
                 ? view.error.message
                 : "Failed to load children"}
             </p>
-          ) : view.data && view.data.children.length > 0 ? (
+          ) : view.data && (view.data.children?.length ?? 0) > 0 ? (
             view.data.children.map((child) => (
               <DigestNodeRow
                 key={child.id}

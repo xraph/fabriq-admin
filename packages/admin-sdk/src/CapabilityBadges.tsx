@@ -8,6 +8,8 @@ import {
   MapPin,
   FileStack,
   Folder,
+  LineChart,
+  GitMerge,
   type LucideIcon,
 } from "lucide-react"
 import type { CapabilityFlags } from "./client"
@@ -30,6 +32,8 @@ const KNOWN_CAPABILITIES: readonly CapabilityMeta[] = [
   { key: "spatial", label: "Spatial", Icon: MapPin },
   { key: "crdt", label: "CRDT", Icon: FileStack },
   { key: "files", label: "Files", Icon: Folder },
+  { key: "distill", label: "Distill", Icon: GitMerge },
+  { key: "timeseries", label: "Timeseries", Icon: LineChart },
 ]
 
 export interface CapabilityBadgesProps {

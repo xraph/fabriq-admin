@@ -113,8 +113,16 @@ describe("GraphPage — explore", () => {
     fireEvent.change(screen.getByLabelText("Depth"), { target: { value: "2" } })
     fireEvent.click(screen.getByRole("button", { name: /explore/i }))
 
-    await waitFor(() => expect(request).toHaveBeenCalled())
-    const arg = request.mock.calls[0][0]
+    // The entity-type combobox fetches GET /entities/types on mount, so wait for
+    // the traverse call specifically rather than the first request.
+    await waitFor(() =>
+      expect(
+        request.mock.calls.some((c) => /\/graph\/traverse$/.test(c[0].path)),
+      ).toBe(true),
+    )
+    const arg = request.mock.calls.find((c) =>
+      /\/graph\/traverse$/.test(c[0].path),
+    )![0]
     expect(arg.method?.toUpperCase()).toBe("POST")
     expect(arg.path).toBe("http://test/graph/traverse")
     expect(arg.body).toMatchObject({ type: "product", id: "p1", depth: 2 })

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   useFabriqClient,
   usePluginHost,
@@ -147,6 +147,7 @@ export function RecallPage() {
   const client = useFabriqClient()
   const { navigate } = usePluginHost()
 
+  const [view, setView] = useState<"recall" | "remember">("recall")
   const [query, setQuery] = useState("active product")
   const [entitiesRaw, setEntitiesRaw] = useState("product,customer")
   const [budget, setBudget] = useState("2000")
@@ -212,6 +213,24 @@ export function RecallPage() {
         </p>
       </div>
 
+      <div className="flex gap-1.5" role="group" aria-label="Recall mode">
+        {(["recall", "remember"] as const).map((v) => (
+          <Button
+            key={v}
+            type="button"
+            size="sm"
+            variant={view === v ? "default" : "outline"}
+            onClick={() => setView(v)}
+          >
+            {v === "recall" ? "Recall (read)" : "Remember (write)"}
+          </Button>
+        ))}
+      </div>
+
+      {view === "remember" && <RememberPanel client={client} navigate={navigate} />}
+
+      {view === "recall" && (
+      <>
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Hybrid recall</CardTitle>
@@ -440,7 +459,187 @@ export function RecallPage() {
           )}
         </>
       )}
+      </>
+      )}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// RememberPanel — the WRITE side of the agent toolkit (Toolkit.Remember). It is
+// deny-by-default: the server-side WritePolicy governs which entity/op pairs are
+// permitted; the panel shows that allowlist and surfaces a policy denial (403)
+// distinctly from a validation error.
+// ---------------------------------------------------------------------------
+
+const REMEMBER_OPS = ["create", "update", "upsert", "delete"] as const
+type RememberOp = (typeof REMEMBER_OPS)[number]
+
+function RememberPanel({
+  client,
+  navigate,
+}: {
+  client: ReturnType<typeof useFabriqClient>
+  navigate: (to: string) => void
+}) {
+  const [allow, setAllow] = useState<Record<string, string[]> | null>(null)
+  const [entity, setEntity] = useState("product")
+  const [op, setOp] = useState<RememberOp>("create")
+  const [aggId, setAggId] = useState("")
+  const [payload, setPayload] = useState('{\n  "name": "Remembered",\n  "sku": "REM-1",\n  "price": 9.99,\n  "status": "active"\n}')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ aggId: string; version: number; eventId: string } | null>(null)
+  const [msg, setMsg] = useState<{ kind: "err" | "denied"; text: string } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    client
+      .agentWritePolicy()
+      .then((p) => { if (!cancelled) setAllow(p.allow) })
+      .catch(() => { if (!cancelled) setAllow({}) })
+    return () => { cancelled = true }
+  }, [client])
+
+  const allowedOps = allow?.[entity.trim()] ?? []
+  const opAllowed = allow ? allowedOps.includes(op) : true
+
+  async function run() {
+    setMsg(null)
+    setResult(null)
+    let parsed: Record<string, unknown> | undefined
+    if (op !== "delete") {
+      try {
+        parsed = payload.trim() ? JSON.parse(payload) : {}
+      } catch (e) {
+        setMsg({ kind: "err", text: `Payload is not valid JSON: ${e instanceof Error ? e.message : String(e)}` })
+        return
+      }
+    }
+    setBusy(true)
+    try {
+      const res = await client.agentRemember({
+        entity: entity.trim(),
+        op,
+        ...(aggId.trim() ? { aggId: aggId.trim() } : {}),
+        ...(parsed ? { payload: parsed } : {}),
+      })
+      setResult(res.result)
+    } catch (err) {
+      if (err instanceof HttpTransportError && err.status === 403) {
+        setMsg({ kind: "denied", text: `Policy denied: ${op} on "${entity}" is not permitted.` })
+      } else {
+        setMsg({ kind: "err", text: err instanceof Error ? err.message : String(err) })
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Guarded write (Remember)</CardTitle>
+          <CardDescription>
+            Writes through the agent toolkit&apos;s deny-by-default policy — the complement to recall&apos;s
+            read side. Only the allowlisted entity/op pairs below succeed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Allowlist */}
+          <div className="flex flex-wrap items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">Allowed:</span>
+            {allow === null ? (
+              <Skeleton className="h-5 w-40" />
+            ) : Object.keys(allow).length === 0 ? (
+              <span className="text-xs text-muted-foreground italic">nothing (deny-all)</span>
+            ) : (
+              Object.entries(allow).map(([ent, ops]) => (
+                <Badge key={ent} variant="outline" className="font-mono text-xs">
+                  {ent}: {ops.join("/")}
+                </Badge>
+              ))
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-1.5 sm:w-44">
+              <label htmlFor="rem-entity" className="text-sm font-medium">Entity</label>
+              <Input id="rem-entity" value={entity} onChange={(e) => setEntity(e.target.value)}
+                placeholder="product" className="font-mono" />
+            </div>
+            <div className="grid gap-1.5">
+              <span className="text-sm font-medium">Op</span>
+              <div className="flex gap-1.5">
+                {REMEMBER_OPS.map((o) => {
+                  const ok = allow ? (allow[entity.trim()] ?? []).includes(o) : true
+                  return (
+                    <Button key={o} type="button" size="sm"
+                      variant={op === o ? "secondary" : "ghost"}
+                      className={ok ? "" : "opacity-50"}
+                      onClick={() => setOp(o)}>
+                      {o}
+                    </Button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="grid gap-1.5 sm:w-64">
+              <label htmlFor="rem-aggid" className="text-sm font-medium">
+                Aggregate id {op === "create" && <span className="font-normal text-muted-foreground">(optional)</span>}
+              </label>
+              <Input id="rem-aggid" value={aggId} onChange={(e) => setAggId(e.target.value)}
+                placeholder={op === "create" ? "auto (ULID)" : "required"} className="font-mono" />
+            </div>
+          </div>
+
+          {op !== "delete" && (
+            <div className="grid gap-1.5">
+              <label htmlFor="rem-payload" className="text-sm font-medium">Payload (JSON)</label>
+              <textarea
+                id="rem-payload"
+                rows={8}
+                value={payload}
+                onChange={(e) => setPayload(e.target.value)}
+                className="w-full rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+          )}
+
+          <Button type="button" onClick={run} disabled={busy}>
+            {busy ? "Remembering…" : opAllowed ? "Remember" : "Remember (will be denied)"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {msg && (
+        <Alert variant={msg.kind === "denied" ? "default" : "destructive"}>
+          <AlertDescription>
+            <span className="font-medium">{msg.kind === "denied" ? "Denied by policy" : "Write failed"}</span>
+            <span className="block text-xs mt-1 opacity-80">{msg.text}</span>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Committed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2 text-xs font-mono">
+              <button type="button" className="hover:underline"
+                onClick={() => navigate("entities/" + encodeURIComponent(entity.trim()) + "/" + encodeURIComponent(result.aggId))}
+                title="Open entity">
+                {result.aggId}
+              </button>
+              <Badge variant="outline">v{result.version}</Badge>
+              <span className="text-muted-foreground">event {result.eventId}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </>
   )
 }
 

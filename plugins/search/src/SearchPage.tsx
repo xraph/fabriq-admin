@@ -4,6 +4,7 @@ import {
   usePluginHost,
   useTenantContext,
   useTenant,
+  useConfirm,
   HttpTransportError,
   EntityTypeCombobox,
   type EntityRecord,
@@ -410,6 +411,7 @@ function VectorManage({
   defaultType: string
   onOpen: (id: string) => void
 }) {
+  const confirm = useConfirm()
   const [entity, setEntity] = useState(defaultType || "product")
   const [id, setId] = useState("")
   const [info, setInfo] = useState<VectorEmbeddingInfo | null>(null)
@@ -438,7 +440,14 @@ function VectorManage({
   }
 
   async function deleteOne() {
-    if (!window.confirm(`Delete the embedding for ${entity}/${id}?\n\nThe source row stays — only its vector is removed (rebuildable by re-indexing).`)) {
+    if (
+      !(await confirm({
+        title: `Delete the embedding for ${entity}/${id}?`,
+        description: "The source row stays — only its vector is removed (rebuildable by re-indexing).",
+        confirmText: "Delete",
+        destructive: true,
+      }))
+    ) {
       return
     }
     setBusy(true)
@@ -461,7 +470,14 @@ function VectorManage({
       setMsg({ kind: "err", text: "Enter a meta key and value to match." })
       return
     }
-    if (!window.confirm(`Delete ALL ${dbmEntity} embeddings where meta ${key} = "${val}"?\n\nThis cannot be undone (rebuildable by re-indexing).`)) {
+    if (
+      !(await confirm({
+        title: `Delete ALL ${dbmEntity} embeddings where meta ${key} = "${val}"?`,
+        description: "This cannot be undone (rebuildable by re-indexing).",
+        confirmText: "Delete matching",
+        destructive: true,
+      }))
+    ) {
       return
     }
     setBusy(true)

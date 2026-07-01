@@ -88,7 +88,9 @@ describe("DistillPage — tree drill-down", () => {
           ],
         }
       }
-      if (path.includes(encodeURIComponent("digest:2:tenant"))) {
+      // The client encodes the id per-segment, KEEPING the colons
+      // (digest:2:tenant), so match the raw colon-delimited id in the path.
+      if (path.includes("digest:2:tenant")) {
         return {
           node: { id: "digest:2:tenant", level: 2, childCount: 2 },
           summary: "Tenant root summary",
@@ -98,7 +100,7 @@ describe("DistillPage — tree drill-down", () => {
           ],
         }
       }
-      if (path.includes(encodeURIComponent("digest:1:scopeA"))) {
+      if (path.includes("digest:1:scopeA")) {
         return {
           node: { id: "digest:1:scopeA", level: 1, childCount: 1 },
           summary: "Scope A summary",

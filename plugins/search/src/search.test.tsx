@@ -36,6 +36,17 @@ function makeClient(handler: (opts: RequestOpts) => unknown): {
   }
 }
 
+// The entity-type combobox fetches `GET /entities/types` on mount, so the
+// `request` spy always includes that call. Select the operation call by path.
+function opCall(
+  request: ReturnType<typeof vi.fn>,
+  matchPath: RegExp,
+): RequestOpts | undefined {
+  return request.mock.calls
+    .map((c) => c[0] as RequestOpts)
+    .find((o) => matchPath.test(o.path))
+}
+
 function renderSearch(client: FabriqClient) {
   return render(
     <FabriqAdmin
@@ -86,8 +97,8 @@ describe("SearchPage — text mode", () => {
     fireEvent.change(screen.getByLabelText("Query"), { target: { value: "wid" } })
     fireEvent.click(screen.getByRole("button", { name: /run/i }))
 
-    await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
-    const arg = request.mock.calls[0][0]
+    await waitFor(() => expect(opCall(request, /\/search$/)).toBeTruthy())
+    const arg = opCall(request, /\/search$/)!
     expect(arg.path).toBe("http://test/search")
     expect(arg.query).toMatchObject({ type: "product", q: "wid" })
 
@@ -122,8 +133,8 @@ describe("SearchPage — semantic mode", () => {
     fireEvent.change(screen.getByLabelText("Query"), { target: { value: "blue widget" } })
     fireEvent.click(screen.getByRole("button", { name: /run/i }))
 
-    await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
-    const arg = request.mock.calls[0][0]
+    await waitFor(() => expect(opCall(request, /\/search\/vector$/)).toBeTruthy())
+    const arg = opCall(request, /\/search\/vector$/)!
     expect(arg.method?.toUpperCase()).toBe("POST")
     expect(arg.path).toBe("http://test/search/vector")
     expect(arg.body).toMatchObject({ type: "product", query: "blue widget" })
@@ -154,8 +165,8 @@ describe("SearchPage — similar mode", () => {
     fireEvent.change(screen.getByLabelText("Entity id"), { target: { value: "p1" } })
     fireEvent.click(screen.getByRole("button", { name: /run/i }))
 
-    await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
-    const arg = request.mock.calls[0][0]
+    await waitFor(() => expect(opCall(request, /\/search\/vector$/)).toBeTruthy())
+    const arg = opCall(request, /\/search\/vector$/)!
     expect(arg.path).toBe("http://test/search/vector")
     expect(arg.body).toMatchObject({ type: "product", id: "p1" })
     expect(arg.body).not.toHaveProperty("query")
@@ -195,7 +206,8 @@ describe("SearchPage — validation", () => {
     fireEvent.click(screen.getByRole("button", { name: /run/i }))
 
     await screen.findByText(/enter a query/i)
-    expect(request).not.toHaveBeenCalled()
+    // The combobox may fetch entity types, but no search request must fire.
+    expect(opCall(request, /\/search/)).toBeUndefined()
   })
 })
 

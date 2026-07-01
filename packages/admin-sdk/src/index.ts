@@ -59,3 +59,5 @@ export type { RoutingStrategy } from "./FabriqAdmin"
 
 export { EntityTypeCombobox } from "./EntityTypeCombobox"
 export type { EntityTypeComboboxProps } from "./EntityTypeCombobox"
+export { ConfirmProvider, useConfirm } from "./confirm"
+export type { ConfirmOptions, ConfirmFn } from "./confirm"

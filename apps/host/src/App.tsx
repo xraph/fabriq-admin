@@ -16,11 +16,15 @@ import { livePlugin } from "@fabriq/plugin-live"
 import { graphPlugin } from "@fabriq/plugin-graph"
 import { spatialPlugin } from "@fabriq/plugin-spatial"
 import { telemetryPlugin } from "@fabriq/plugin-telemetry"
+import { eventsPlugin } from "@fabriq/plugin-events"
+import { projectionsPlugin } from "@fabriq/plugin-projections"
+import { cachePlugin } from "@fabriq/plugin-cache"
 import { filesPlugin } from "@fabriq/plugin-files"
 import { crdtPlugin } from "@fabriq/plugin-crdt"
 import { distillPlugin } from "@fabriq/plugin-distill"
 import { pluginsManagerPlugin } from "@fabriq/plugin-plugins-manager"
 import { apiConsolePlugin } from "@fabriq/plugin-api-console"
+import { commandsPlugin } from "@fabriq/plugin-commands"
 import {
   __federation_method_setRemote,
   __federation_method_getRemote,
@@ -71,11 +75,15 @@ const plugins = [
   graphPlugin,
   spatialPlugin,
   telemetryPlugin,
+  eventsPlugin,
+  projectionsPlugin,
+  cachePlugin,
   filesPlugin,
   crdtPlugin,
   distillPlugin,
   pluginsManagerPlugin,
   apiConsolePlugin,
+  commandsPlugin,
 ]
 
 export function App() {

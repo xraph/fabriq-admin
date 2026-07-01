@@ -111,3 +111,50 @@ export {
   BreadcrumbSeparator,
   BreadcrumbEllipsis,
 } from "./components/ui/breadcrumb"
+
+// Data grid (reui / TanStack Table)
+export {
+  DataGrid,
+  DataGridContainer,
+  DataGridProvider,
+  useDataGrid,
+  getColumnHeaderLabel,
+} from "./components/reui/data-grid/data-grid"
+export type { DataGridProps } from "./components/reui/data-grid/data-grid"
+export { DataGridTable } from "./components/reui/data-grid/data-grid-table"
+export { DataGridColumnHeader } from "./components/reui/data-grid/data-grid-column-header"
+
+// Form primitives
+export { Label } from "./components/ui/label"
+export { Textarea } from "./components/ui/textarea"
+export { Calendar } from "./components/ui/calendar"
+
+// Alert dialog (Base UI)
+export {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogPortal,
+  AlertDialogOverlay,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "./components/ui/alert-dialog"
+
+// Combobox (Base UI)
+export {
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxGroup,
+  ComboboxLabel,
+  ComboboxEmpty,
+  ComboboxSeparator,
+  ComboboxTrigger,
+  ComboboxValue,
+} from "./components/ui/combobox"

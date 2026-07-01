@@ -28,3 +28,22 @@ if (typeof window !== "undefined" && !window.ResizeObserver) {
     value: ResizeObserver,
   })
 }
+
+// The entity list uses IntersectionObserver for infinite-scroll; jsdom has no
+// implementation. A no-op default keeps components from crashing; individual
+// tests may replace it with a controllable mock to drive the sentinel.
+if (typeof window !== "undefined" && !window.IntersectionObserver) {
+  class IntersectionObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  }
+  Object.defineProperty(window, "IntersectionObserver", {
+    writable: true,
+    configurable: true,
+    value: IntersectionObserver,
+  })
+}

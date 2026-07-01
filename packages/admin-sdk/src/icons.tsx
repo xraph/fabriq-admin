@@ -13,6 +13,11 @@ import {
   Activity,
   GitMerge,
   Sparkles,
+  LineChart,
+  ScrollText,
+  SquareTerminal,
+  Workflow,
+  DatabaseZap,
   type LucideIcon,
 } from "lucide-react"
 
@@ -53,6 +58,22 @@ export function resolveIcon(name?: string): LucideIcon {
     case "sparkles":
     case "recall":
       return Sparkles
+    case "line-chart":
+    case "telemetry":
+    case "timeseries":
+      return LineChart
+    case "events":
+    case "log":
+    case "outbox":
+      return ScrollText
+    case "commands":
+    case "command":
+      return SquareTerminal
+    case "projections":
+    case "projection":
+      return Workflow
+    case "cache":
+      return DatabaseZap
     default:
       return Circle
   }
