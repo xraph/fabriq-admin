@@ -29,6 +29,7 @@
     "@fabriq/plugin-search": "workspace:*",
     "@fabriq/plugin-spatial": "workspace:*",
     "@fabriq/plugin-telemetry": "workspace:*",
+    "@fabriq/plugin-types": "workspace:*",
     "@fabriq/ui": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
