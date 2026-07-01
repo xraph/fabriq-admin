@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
   useFabriqClient,
   useFabriqQuery,
@@ -89,17 +89,26 @@ function MigrationsTab({ canAdmin }: { canAdmin: boolean }) {
   )
   const [job, setJob] = useState<MigrationJob | null>(null)
   const [runErr, setRunErr] = useState<string | null>(null)
+  // Stop polling if the page unmounts (tab switch / navigation).
+  const mounted = useRef(true)
+  useEffect(() => () => { mounted.current = false }, [])
 
+  // Poll a job until it reaches a terminal state, bounded so a stuck job never
+  // pins the UI forever (~3 min at 800ms) — on timeout we surface an error.
+  const maxPolls = 225
   async function pollJob(id: string) {
-    // Poll until terminal.
-    for (;;) {
+    for (let i = 0; i < maxPolls && mounted.current; i++) {
       const j = await client.migrationJob(id)
+      if (!mounted.current) return
       setJob(j)
       if (j.state !== "running") {
         await refetch()
         return
       }
       await new Promise((r) => setTimeout(r, 800))
+    }
+    if (mounted.current) {
+      setRunErr("Job is still running after the poll window — check the backend for its final state.")
     }
   }
 
@@ -110,6 +119,7 @@ function MigrationsTab({ canAdmin }: { canAdmin: boolean }) {
         kind === "up"
           ? "Applies all pending migrations to the database (instance-global)."
           : "Reverts the most recently applied migration batch (instance-global).",
+      destructive: true,
     })
     if (!ok) return
     setRunErr(null)
@@ -258,6 +268,7 @@ function DdlTab() {
       title: "Run ad-hoc DDL?",
       description:
         "This runs OUTSIDE the migration authority — not versioned, not reversible. SQL:\n\n" + sql,
+      destructive: true,
     })
     if (!ok) return
     setError(null)

@@ -1,13 +1,28 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
-import { FabriqClient, FabriqAdmin, type FabriqTransport } from "@fabriq/admin-sdk"
+import {
+  FabriqClient,
+  FabriqAdmin,
+  HttpTransportError,
+  type FabriqTransport,
+} from "@fabriq/admin-sdk"
 import { migrationsPlugin } from "./index"
 
-function makeClient(caps: string[]) {
-  const request = vi.fn(async (opts: { path: string }) => {
-    const p = opts.path
+function makeClient(caps: string[], opts?: { ddlError?: boolean }) {
+  const request = vi.fn(async (o: { path: string }) => {
+    const p = o.path
     if (p.endsWith("/meta")) {
       return { name: "fabriq-admin", version: "0", capabilities: caps }
+    }
+    if (p.endsWith("/migrations/up") || p.endsWith("/migrations/down")) {
+      return { jobId: "j1" }
+    }
+    if (p.includes("/migrations/jobs/")) {
+      return { id: "j1", kind: "up", state: "done", names: ["outbox"], startedAt: "t" }
+    }
+    if (p.endsWith("/schema/ddl")) {
+      if (opts?.ddlError) throw new HttpTransportError(400, '{"error":"boom ddl error"}')
+      return { ok: true, executed: "CREATE TABLE z (id text)" }
     }
     if (p.endsWith("/migrations")) {
       return {
@@ -38,9 +53,9 @@ function makeClient(caps: string[]) {
   return new FabriqClient({ baseUrl: "http://test", transport })
 }
 
-function renderMigrations(caps: string[]) {
+function renderMigrations(caps: string[], opts?: { ddlError?: boolean }) {
   return render(
-    <FabriqAdmin client={makeClient(caps)} plugins={[migrationsPlugin]} loadRemote={vi.fn()} initialPath="migrations" />,
+    <FabriqAdmin client={makeClient(caps, opts)} plugins={[migrationsPlugin]} loadRemote={vi.fn()} initialPath="migrations" />,
   )
 }
 
@@ -80,5 +95,29 @@ describe("MigrationsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /ad-hoc ddl/i }))
     await waitFor(() => expect(screen.getByLabelText(/ddl/i)).toBeTruthy())
     expect(screen.getByRole("button", { name: /run ddl/i })).toBeTruthy()
+  })
+
+  it("Run pending → confirm → polls the job → renders the terminal status", async () => {
+    renderMigrations(["schema.admin"])
+    await screen.findByText("202606120001")
+    fireEvent.click(screen.getByRole("button", { name: /run pending/i }))
+    // Confirm dialog appears; click its confirm action.
+    const confirmBtn = await screen.findByRole("button", { name: /^confirm$/i })
+    fireEvent.click(confirmBtn)
+    // Job polled to a terminal state → status banner shows kind + state + names.
+    await screen.findByText(/up — done/i)
+    await screen.findByText(/applied: outbox/i)
+  })
+
+  it("Ad-hoc DDL → confirm → surfaces the parsed backend error", async () => {
+    renderMigrations(["schema.admin"], { ddlError: true })
+    await screen.findByText("202606120001")
+    fireEvent.click(screen.getByRole("button", { name: /ad-hoc ddl/i }))
+    fireEvent.change(await screen.findByLabelText(/ddl/i), { target: { value: "CREATE TABLE z (id text)" } })
+    fireEvent.click(screen.getByRole("button", { name: /run ddl/i }))
+    const confirmBtn = await screen.findByRole("button", { name: /^confirm$/i })
+    fireEvent.click(confirmBtn)
+    // Friendly parsed error (not the raw HTTP 400 envelope).
+    await screen.findByText(/boom ddl error/i)
   })
 })
