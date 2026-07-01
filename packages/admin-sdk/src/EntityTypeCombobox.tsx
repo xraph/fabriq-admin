@@ -11,7 +11,15 @@ export interface EntityTypeComboboxProps {
   onChange: (type: string) => void
   id?: string
   className?: string
+  /**
+   * Placeholder shown when no value is selected.
+   * @default "type…"
+   */
   placeholder?: string
+  /**
+   * Pair with a visible `<label htmlFor={id}>` for labelling; pass `aria-label`
+   * only when there is no visible label (avoids double-labelling).
+   */
   "aria-label"?: string
 }
 
@@ -28,8 +36,8 @@ export function EntityTypeCombobox({
   onChange,
   id,
   className,
-  placeholder = "product",
-  "aria-label": ariaLabel = "Entity type",
+  placeholder = "type…",
+  "aria-label": ariaLabel,
 }: EntityTypeComboboxProps) {
   const tenantStore = useTenantContext()
   const tenantId = React.useSyncExternalStore(
@@ -45,6 +53,8 @@ export function EntityTypeCombobox({
 
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState("")
+
+  const listboxId = React.useId()
 
   const trimmed = filter.trim()
   const filtered = trimmed
@@ -63,15 +73,25 @@ export function EntityTypeCombobox({
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault()
-      commit(filtered.length > 0 ? filtered[0] : trimmed)
+      // Free-text-first: commit exactly what was typed; only fall back to the
+      // first item when the search box is empty.
+      commit(trimmed || (filtered.length > 0 ? filtered[0] : ""))
     }
   }
 
+  function handleOpenChange(next: boolean) {
+    if (!next) setFilter("")
+    setOpen(next)
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         id={id}
         aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listboxId}
         className={cn(
           "inline-flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-2.5 text-xs",
           className,
@@ -92,7 +112,7 @@ export function EntityTypeCombobox({
           aria-label="Search entity types"
           className="mb-1 h-7 text-xs"
         />
-        <div role="listbox" aria-label="Entity types" className="max-h-56 overflow-y-auto">
+        <div role="listbox" id={listboxId} aria-label="Entity types" className="max-h-56 overflow-y-auto">
           {filtered.map((t) => (
             <button
               key={t}
@@ -116,21 +136,23 @@ export function EntityTypeCombobox({
           {known.length === 0 && (
             <p className="px-2 py-1 text-xs italic text-muted-foreground">No known types</p>
           )}
+          {trimmed && !exactMatch && (
+            <>
+              <div className="-mx-1 my-1 h-px bg-border" role="separator" />
+              <button
+                type="button"
+                role="option"
+                aria-selected={false}
+                onClick={() => commit(trimmed)}
+                className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs outline-none hover:bg-accent hover:text-accent-foreground"
+              >
+                <span>
+                  Use "<span className="font-mono">{trimmed}</span>"
+                </span>
+              </button>
+            </>
+          )}
         </div>
-        {trimmed && !exactMatch && (
-          <>
-            <div className="-mx-1 my-1 h-px bg-border" role="separator" />
-            <button
-              type="button"
-              onClick={() => commit(trimmed)}
-              className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs outline-none hover:bg-accent hover:text-accent-foreground"
-            >
-              <span>
-                Use "<span className="font-mono">{trimmed}</span>"
-              </span>
-            </button>
-          </>
-        )}
       </PopoverContent>
     </Popover>
   )

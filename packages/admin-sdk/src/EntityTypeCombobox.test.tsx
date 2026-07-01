@@ -26,7 +26,11 @@ function renderCombo(
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <FabriqProvider client={makeClient(opts.types, opts.reject)} queryClient={qc}>
-      <EntityTypeCombobox value={props.value ?? "product"} onChange={onChange} />
+      <EntityTypeCombobox
+        value={props.value ?? "product"}
+        onChange={onChange}
+        aria-label="Entity type"
+      />
     </FabriqProvider>,
   )
   return { onChange }
@@ -72,7 +76,7 @@ describe("EntityTypeCombobox", () => {
     fireEvent.change(await screen.findByRole("textbox", { name: /search entity types/i }), {
       target: { value: "widget" },
     })
-    fireEvent.click(await screen.findByRole("button", { name: /use .*widget/i }))
+    fireEvent.click(await screen.findByRole("option", { name: /use .*widget/i }))
     expect(onChange).toHaveBeenCalledWith("widget")
   })
 
@@ -83,5 +87,15 @@ describe("EntityTypeCombobox", () => {
     fireEvent.change(input, { target: { value: "gadget" } })
     fireEvent.keyDown(input, { key: "Enter" })
     await waitFor(() => expect(onChange).toHaveBeenCalledWith("gadget"))
+  })
+
+  it("Enter commits the typed text, not the top filtered match", async () => {
+    const { onChange } = renderCombo({ value: "" }, { types: ["order", "ordinary"] })
+    fireEvent.click(screen.getByRole("button", { name: /entity type/i }))
+    const input = await screen.findByRole("textbox", { name: /search entity types/i })
+    fireEvent.change(input, { target: { value: "ord" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith("ord"))
+    expect(onChange).not.toHaveBeenCalledWith("order")
   })
 })
