@@ -56,3 +56,6 @@ export {
 } from "./routerAdapters"
 export type { RouterAdapter, PathAdapterOptions, RouterBridge } from "./routerAdapters"
 export type { RoutingStrategy } from "./FabriqAdmin"
+
+export { EntityTypeCombobox } from "./EntityTypeCombobox"
+export type { EntityTypeComboboxProps } from "./EntityTypeCombobox"
