@@ -148,4 +148,17 @@ describe("createPathAdapter (jsdom)", () => {
     expect(a.read()).toBe("search")
     unsub()
   })
+
+  it("fires a subscriber exactly once per push and once per popstate", () => {
+    window.history.replaceState(null, "", "/admin")
+    const a = createPathAdapter({ base: "/admin" })
+    let n = 0
+    const unsub = a.subscribe(() => { n++ })
+    a.push("entities")
+    expect(n).toBe(1) // one fire for programmatic push
+    window.history.replaceState(null, "", "/admin/search")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+    expect(n).toBe(2) // one more for back/forward
+    unsub()
+  })
 })

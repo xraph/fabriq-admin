@@ -109,6 +109,16 @@ export function createHashAdapter(): RouterAdapter {
 // router bridge (React Router / Next). Clerk-style routerPush/routerReplace.
 // ---------------------------------------------------------------------------
 
+/**
+ * Host-router navigation bridge (Clerk-style). Receives the destination
+ * absolute path and a `meta.windowNavigate` hard-navigation fallback.
+ *
+ * CONTRACT: the host must update `window.location` SYNCHRONOUSLY (as React
+ * Router's `navigate` does) OR dispatch a `popstate` event after navigating.
+ * Routers that defer the URL change (e.g. Next.js App Router) will otherwise
+ * leave the console on the previous route until the next navigation, because
+ * the adapter reads the live `window.location` on notify and no popstate fires.
+ */
 export interface RouterBridge {
   (to: string, meta?: { windowNavigate: (to: string | URL) => void }): unknown
 }
@@ -126,8 +136,13 @@ export function createPathAdapter(opts: PathAdapterOptions): RouterAdapter {
     for (const cb of listeners) cb()
   }
   function windowNavigate(to: string | URL) {
+    // Full-page navigation fallback handed to the host bridge (Clerk semantics):
+    // "I could not handle this route change — let the browser do a hard nav."
     if (hasWindow) window.location.assign(to)
   }
+  // Single popstate handler → notify(); bound only while there is ≥1 subscriber.
+  let popstateBound = false
+  const onPopState = () => notify()
 
   return {
     read: () => (hasWindow ? stripBase(window.location.pathname, opts.base) : ""),
@@ -136,6 +151,9 @@ export function createPathAdapter(opts: PathAdapterOptions): RouterAdapter {
       const to = joinBase(opts.base, p)
       if (opts.routerPush) opts.routerPush(to, { windowNavigate })
       else window.history.pushState(null, "", to)
+      // Optimistic notify: pushState never fires popstate. NOTE: when a host
+      // routerPush is used, this assumes the host updates window.location
+      // synchronously (e.g. React Router's navigate). See RouterBridge docs.
       notify()
     },
     replace: (p) => {
@@ -148,10 +166,16 @@ export function createPathAdapter(opts: PathAdapterOptions): RouterAdapter {
     subscribe: (cb) => {
       if (!hasWindow) return () => {}
       listeners.add(cb)
-      window.addEventListener("popstate", cb)
+      if (!popstateBound) {
+        window.addEventListener("popstate", onPopState)
+        popstateBound = true
+      }
       return () => {
         listeners.delete(cb)
-        window.removeEventListener("popstate", cb)
+        if (listeners.size === 0 && popstateBound) {
+          window.removeEventListener("popstate", onPopState)
+          popstateBound = false
+        }
       }
     },
   }
