@@ -155,6 +155,56 @@ export interface RawQueryResult {
   elapsedMs: number
 }
 
+/** One migration's status (from GET /migrations). */
+export interface MigrationInfo {
+  name: string
+  version: string
+  group: string
+  comment: string
+  applied: boolean
+  appliedAt?: string
+}
+
+export interface MigrationGroupStatus {
+  name: string
+  applied: MigrationInfo[]
+  pending: MigrationInfo[]
+}
+
+export interface MigrationStatusResult {
+  groups: MigrationGroupStatus[]
+}
+
+/** An async migration run job (from POST /migrations/up|down and the job poll). */
+export interface MigrationJob {
+  id: string
+  kind: "up" | "down"
+  state: "running" | "done" | "failed"
+  names?: string[]
+  error?: string
+  startedAt: string
+  endedAt?: string
+}
+
+/** One entity's registry-vs-physical schema drift (from GET /schema/drift). */
+export interface DriftEntity {
+  entity: string
+  table: string
+  dynamic: boolean
+  inSync: boolean
+  missing: string[]
+  extra: string[]
+}
+
+export interface SchemaDriftResult {
+  entities: DriftEntity[]
+}
+
+export interface MigrationScaffold {
+  filename: string
+  content: string
+}
+
 /** The agent write allowlist (deny-by-default): entity name → permitted ops. */
 export interface AgentWritePolicy {
   allow: Record<string, string[]>
@@ -991,6 +1041,78 @@ export class FabriqClient {
       method: "POST",
       path: `${this.baseUrl}/query`,
       body: input,
+    })
+  }
+
+  /** GET /migrations — applied + pending migrations (read-only, always available). */
+  migrationStatus(): Promise<MigrationStatusResult> {
+    return this.transport.request<MigrationStatusResult>({
+      method: "GET",
+      path: `${this.baseUrl}/migrations`,
+    })
+  }
+
+  /**
+   * POST /migrations/up — run all pending migrations as a background job.
+   * Returns the job id to poll/stream. Requires the schema-admin gate (403 otherwise).
+   */
+  runMigrations(): Promise<{ jobId: string }> {
+    return this.transport.request<{ jobId: string }>({
+      method: "POST",
+      path: `${this.baseUrl}/migrations/up`,
+      body: {},
+    })
+  }
+
+  /** POST /migrations/down — roll back the last applied batch as a background job. */
+  rollbackMigrations(): Promise<{ jobId: string }> {
+    return this.transport.request<{ jobId: string }>({
+      method: "POST",
+      path: `${this.baseUrl}/migrations/down`,
+      body: {},
+    })
+  }
+
+  /** GET /migrations/jobs/:id — poll one migration job's state. */
+  migrationJob(id: string): Promise<MigrationJob> {
+    return this.transport.request<MigrationJob>({
+      method: "GET",
+      path: `${this.baseUrl}/migrations/jobs/${encodeURIComponent(id)}`,
+    })
+  }
+
+  /** The SSE URL for streaming a migration job's state (use with EventSource). */
+  migrationJobStreamUrl(id: string): string {
+    return `${this.baseUrl}/migrations/jobs/${encodeURIComponent(id)}/stream`
+  }
+
+  /** GET /migrations/scaffold — generate a Go migration-file skeleton (runs nothing). */
+  migrationScaffold(name: string, version: string): Promise<MigrationScaffold> {
+    return this.transport.request<MigrationScaffold>({
+      method: "GET",
+      path: `${this.baseUrl}/migrations/scaffold`,
+      query: { name, version },
+    })
+  }
+
+  /** GET /schema/drift — registry-vs-physical column drift per entity (read-only). */
+  schemaDrift(): Promise<SchemaDriftResult> {
+    return this.transport.request<SchemaDriftResult>({
+      method: "GET",
+      path: `${this.baseUrl}/schema/drift`,
+    })
+  }
+
+  /**
+   * POST /schema/ddl — run a single ad-hoc DDL statement (gated escape hatch,
+   * outside the migration authority). Throws HttpTransportError 400 on a bad
+   * statement, 403 when the schema-admin gate is off, 501 without a store.
+   */
+  runDDL(sql: string): Promise<{ ok: boolean; executed: string }> {
+    return this.transport.request<{ ok: boolean; executed: string }>({
+      method: "POST",
+      path: `${this.baseUrl}/schema/ddl`,
+      body: { sql },
     })
   }
 

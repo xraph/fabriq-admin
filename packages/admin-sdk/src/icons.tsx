@@ -18,6 +18,7 @@ import {
   SquareTerminal,
   Workflow,
   DatabaseZap,
+  Layers,
   Database,
   type LucideIcon,
 } from "lucide-react"
@@ -77,6 +78,8 @@ export function resolveIcon(name?: string): LucideIcon {
       return DatabaseZap
     case "query":
       return Database
+    case "migrations":
+      return Layers
     default:
       return Circle
   }

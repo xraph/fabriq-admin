@@ -844,4 +844,75 @@ describe("FabriqClient", () => {
     expect(result.columns).toEqual(["id", "name"])
     expect(result.rows[0].name).toBe("Widget")
   })
+
+  it("migrationStatus — GET /migrations", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ groups: [{ name: "fabriq", applied: [], pending: [] }] })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const res = await client.migrationStatus()
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/migrations")
+    expect(res.groups[0].name).toBe("fabriq")
+  })
+
+  it("runMigrations — POST /migrations/up returns jobId", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ jobId: "job-1" })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const res = await client.runMigrations()
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/migrations/up")
+    expect(res.jobId).toBe("job-1")
+  })
+
+  it("rollbackMigrations — POST /migrations/down", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ jobId: "job-2" })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.rollbackMigrations()
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/migrations/down")
+  })
+
+  it("migrationJob — GET /migrations/jobs/:id (encoded)", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ id: "j 1", kind: "up", state: "done", startedAt: "x" })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.migrationJob("j 1")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/migrations/jobs/j%201")
+  })
+
+  it("migrationJobStreamUrl — builds the SSE URL", () => {
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport: new FakeTransport() })
+    expect(client.migrationJobStreamUrl("j1")).toBe("http://localhost:9000/migrations/jobs/j1/stream")
+  })
+
+  it("migrationScaffold — GET /migrations/scaffold with name+version query", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ filename: "add_x.go", content: "package migrations" })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const res = await client.migrationScaffold("add_x", "202607010001")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/migrations/scaffold")
+    expect(transport.lastRequest?.query).toEqual({ name: "add_x", version: "202607010001" })
+    expect(res.filename).toBe("add_x.go")
+  })
+
+  it("schemaDrift — GET /schema/drift", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ entities: [{ entity: "product", table: "ds_products", dynamic: true, inSync: true, missing: [], extra: [] }] })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const res = await client.schemaDrift()
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/schema/drift")
+    expect(res.entities[0].entity).toBe("product")
+  })
+
+  it("runDDL — POST /schema/ddl with {sql}", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ ok: true, executed: "CREATE TABLE z (id text)" })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const res = await client.runDDL("CREATE TABLE z (id text)")
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/schema/ddl")
+    expect(transport.lastRequest?.body).toEqual({ sql: "CREATE TABLE z (id text)" })
+    expect(res.ok).toBe(true)
+  })
 })
