@@ -89,3 +89,63 @@ describe("createHashAdapter (jsdom)", () => {
     expect(a.read()).toBe("graph")
   })
 })
+
+import { createPathAdapter } from "./routerAdapters"
+import { vi } from "vitest"
+
+describe("createPathAdapter (jsdom)", () => {
+  function goto(pathname: string) {
+    window.history.replaceState(null, "", pathname)
+  }
+
+  it("reads the path stripped of the mount base", () => {
+    goto("/admin/entities/order")
+    expect(createPathAdapter({ base: "/admin" }).read()).toBe("entities/order")
+  })
+
+  it("reads '' when the URL is outside the mount base", () => {
+    goto("/somewhere/else")
+    expect(createPathAdapter({ base: "/admin" }).read()).toBe("")
+  })
+
+  it("push uses history.pushState and notifies (no routerPush)", () => {
+    goto("/admin")
+    const a = createPathAdapter({ base: "/admin" })
+    let n = 0
+    const unsub = a.subscribe(() => { n++ })
+    a.push("entities/order")
+    expect(window.location.pathname).toBe("/admin/entities/order")
+    expect(a.read()).toBe("entities/order")
+    expect(n).toBe(1)
+    unsub()
+  })
+
+  it("push calls routerPush with the joined path + windowNavigate meta", () => {
+    goto("/admin")
+    const routerPush = vi.fn()
+    createPathAdapter({ base: "/admin", routerPush }).push("search")
+    expect(routerPush).toHaveBeenCalledTimes(1)
+    const [to, meta] = routerPush.mock.calls[0]
+    expect(to).toBe("/admin/search")
+    expect(typeof meta.windowNavigate).toBe("function")
+  })
+
+  it("replace calls routerReplace when provided", () => {
+    goto("/admin")
+    const routerReplace = vi.fn()
+    createPathAdapter({ base: "/admin", routerReplace }).replace("graph")
+    expect(routerReplace).toHaveBeenCalledWith("/admin/graph", expect.anything())
+  })
+
+  it("subscribe reacts to popstate (back/forward)", () => {
+    goto("/admin/entities")
+    const a = createPathAdapter({ base: "/admin" })
+    let n = 0
+    const unsub = a.subscribe(() => { n++ })
+    window.history.replaceState(null, "", "/admin/search")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+    expect(n).toBe(1)
+    expect(a.read()).toBe("search")
+    unsub()
+  })
+})

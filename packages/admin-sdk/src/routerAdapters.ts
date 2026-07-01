@@ -103,3 +103,56 @@ export function createHashAdapter(): RouterAdapter {
     },
   }
 }
+
+// ---------------------------------------------------------------------------
+// Path adapter — clean URLs via the History API, or via a host-provided
+// router bridge (React Router / Next). Clerk-style routerPush/routerReplace.
+// ---------------------------------------------------------------------------
+
+export interface RouterBridge {
+  (to: string, meta?: { windowNavigate: (to: string | URL) => void }): unknown
+}
+
+export interface PathAdapterOptions {
+  base: string
+  routerPush?: RouterBridge
+  routerReplace?: RouterBridge
+}
+
+export function createPathAdapter(opts: PathAdapterOptions): RouterAdapter {
+  const hasWindow = typeof window !== "undefined"
+  const listeners = new Set<() => void>()
+  function notify() {
+    for (const cb of listeners) cb()
+  }
+  function windowNavigate(to: string | URL) {
+    if (hasWindow) window.location.assign(to)
+  }
+
+  return {
+    read: () => (hasWindow ? stripBase(window.location.pathname, opts.base) : ""),
+    push: (p) => {
+      if (!hasWindow) return
+      const to = joinBase(opts.base, p)
+      if (opts.routerPush) opts.routerPush(to, { windowNavigate })
+      else window.history.pushState(null, "", to)
+      notify()
+    },
+    replace: (p) => {
+      if (!hasWindow) return
+      const to = joinBase(opts.base, p)
+      if (opts.routerReplace) opts.routerReplace(to, { windowNavigate })
+      else window.history.replaceState(null, "", to)
+      notify()
+    },
+    subscribe: (cb) => {
+      if (!hasWindow) return () => {}
+      listeners.add(cb)
+      window.addEventListener("popstate", cb)
+      return () => {
+        listeners.delete(cb)
+        window.removeEventListener("popstate", cb)
+      }
+    },
+  }
+}
