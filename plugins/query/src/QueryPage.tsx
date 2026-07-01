@@ -6,11 +6,11 @@ import {
 } from "@fabriq/admin-sdk"
 import {
   Button,
-  Textarea,
   Alert,
   AlertTitle,
   AlertDescription,
 } from "@fabriq/ui"
+import { SqlEditor } from "./SqlEditor"
 
 export function QueryPage() {
   const client = useFabriqClient()
@@ -44,15 +44,7 @@ export function QueryPage() {
         </p>
       </div>
 
-      <Textarea
-        aria-label="SQL"
-        className="min-h-32 font-mono"
-        value={sql}
-        onChange={(e) => setSql(e.target.value)}
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run()
-        }}
-      />
+      <SqlEditor value={sql} onChange={setSql} onRun={run} />
       <div className="flex items-center gap-3">
         <Button onClick={run} disabled={running}>
           {running ? "Running…" : "Run"}

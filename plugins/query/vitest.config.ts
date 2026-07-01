@@ -7,6 +7,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("../../packages/ui/src", import.meta.url)),
+      // monaco-editor ships without a "main"/"exports" entry that Vite's
+      // Node-facing resolver can use, so alias it to a tiny stub for tests;
+      // the real editor is mocked out via @monaco-editor/react anyway.
+      "monaco-editor": fileURLToPath(new URL("./src/monaco-editor.stub.ts", import.meta.url)),
     },
   },
   test: { environment: "jsdom", globals: true, setupFiles: ["./vitest.setup.ts"] },

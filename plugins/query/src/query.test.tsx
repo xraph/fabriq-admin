@@ -8,6 +8,26 @@ import {
 } from "@fabriq/admin-sdk"
 import { queryPlugin } from "./index"
 
+vi.mock("@monaco-editor/react", () => ({
+  default: ({ value, onChange, onMount }: {
+    value?: string
+    onChange?: (v: string | undefined) => void
+    onMount?: (...a: unknown[]) => void
+  }) => {
+    if (onMount) onMount({ addCommand: () => {}, focus: () => {} }, {
+      KeyMod: { CtrlCmd: 0 }, KeyCode: { Enter: 0 },
+    })
+    return (
+      <textarea
+        aria-label="SQL"
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+      />
+    )
+  },
+  loader: { config: () => {} },
+}))
+
 function makeClient(handler: (opts: { path: string }) => unknown) {
   const request = vi.fn(async (opts: { path: string }) => handler(opts))
   const transport = {
