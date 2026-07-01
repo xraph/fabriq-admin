@@ -3,6 +3,7 @@ import {
   useFabriqClient,
   usePluginHost,
   HttpTransportError,
+  EntityTypeCombobox,
   type SpatialMatch,
   type SpatialResult,
 } from "@fabriq/admin-sdk"
@@ -200,13 +201,12 @@ export function SpatialPage() {
               <label htmlFor="spatial-entity" className="text-sm font-medium">
                 Entity type
               </label>
-              <Input
+              <EntityTypeCombobox
                 id="spatial-entity"
-                aria-label="Entity type"
                 value={entity}
-                onChange={(e) => setEntity(e.target.value)}
-                placeholder="place"
+                onChange={setEntity}
                 className="font-mono"
+                placeholder="place"
               />
             </div>
             <div className="grid gap-1.5 sm:w-32">

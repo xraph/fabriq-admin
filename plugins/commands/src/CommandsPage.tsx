@@ -4,6 +4,7 @@ import {
   usePluginHost,
   useConfirm,
   HttpTransportError,
+  EntityTypeCombobox,
   type CommandOp,
   type CommandInput,
   type CommandResult,
@@ -202,8 +203,8 @@ export function CommandsPage() {
               <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-1.5 sm:w-44">
                   <label htmlFor="cmd-entity" className="text-sm font-medium">Entity</label>
-                  <Input id="cmd-entity" value={entity} onChange={(e) => setEntity(e.target.value)}
-                    placeholder="product" className="font-mono" />
+                  <EntityTypeCombobox id="cmd-entity" value={entity} onChange={setEntity}
+                    className="font-mono" />
                 </div>
                 <div className="grid gap-1.5">
                   <span className="text-sm font-medium">Op</span>
