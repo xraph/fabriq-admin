@@ -71,3 +71,35 @@ export function createVirtualAdapter(initialPath = ""): RouterAdapter {
     },
   }
 }
+
+// ---------------------------------------------------------------------------
+// Hash adapter — syncs to location.hash (#/entities/order). Zero server config.
+// The mount base is intentionally ignored in hash mode (Clerk semantics).
+// ---------------------------------------------------------------------------
+
+export function createHashAdapter(): RouterAdapter {
+  const hasWindow = typeof window !== "undefined"
+  return {
+    read: () => {
+      if (!hasWindow) return ""
+      const h = window.location.hash
+      const raw = h.startsWith("#") ? h.slice(1) : h
+      return normalize(raw)
+    },
+    push: (p) => {
+      if (!hasWindow) return
+      window.location.hash = "#/" + normalize(p)
+    },
+    replace: (p) => {
+      if (!hasWindow) return
+      const url =
+        window.location.pathname + window.location.search + "#/" + normalize(p)
+      window.history.replaceState(null, "", url)
+    },
+    subscribe: (cb) => {
+      if (!hasWindow) return () => {}
+      window.addEventListener("hashchange", cb)
+      return () => window.removeEventListener("hashchange", cb)
+    },
+  }
+}
