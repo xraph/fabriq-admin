@@ -2,6 +2,7 @@ import React, {
   createContext,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ComponentType,
 } from "react"
@@ -13,7 +14,14 @@ import { FabriqClient } from "./client"
 import { FabriqProvider } from "./provider"
 import type { FabriqAdminPlugin } from "./plugin"
 import { PluginRegistry } from "./registry"
-import { matchRoute, useInternalRouter, type RouterState } from "./router"
+import { matchRoute, useRouter, type RouterState } from "./router"
+import {
+  createVirtualAdapter,
+  createHashAdapter,
+  createPathAdapter,
+  type RouterAdapter,
+  type RouterBridge,
+} from "./routerAdapters"
 import { useResolvedTheme, type ThemeProp, type ResolvedTheme } from "./theme"
 import { resolveIcon } from "./icons"
 import { PluginErrorBoundary } from "./PluginErrorBoundary"
@@ -79,12 +87,22 @@ export function usePluginHost(): PluginHostValue {
 // FabriqAdminProps
 // ---------------------------------------------------------------------------
 
+export type RoutingStrategy = "path" | "hash" | "virtual"
+
 export interface FabriqAdminProps {
   client: FabriqClient
   plugins: FabriqAdminPlugin[]
   theme?: ThemeProp
   basePath?: string
   initialPath?: string
+  /** Routing strategy (Clerk-style). Default "virtual" (in-memory, embed-safe). */
+  routing?: RoutingStrategy
+  /** Mount base for routing="path" (e.g. "/admin"). Falls back to basePath. */
+  path?: string
+  /** Host-router push bridge (e.g. React Router navigate). */
+  routerPush?: RouterBridge
+  /** Host-router replace bridge. */
+  routerReplace?: RouterBridge
   queryClient?: QueryClient
   /**
    * Optional persistence store. If provided, the shell loads persisted remote specs
@@ -143,6 +161,10 @@ export function FabriqAdmin({
   theme = "system",
   basePath = "/admin",
   initialPath = "",
+  routing = "virtual",
+  path,
+  routerPush,
+  routerReplace,
   queryClient,
   store,
   loadRemote,
@@ -153,7 +175,27 @@ export function FabriqAdmin({
   const { registry, plugins: pluginEntries, addRemote, removeRemote, reloadRemote } =
     usePluginManager({ plugins, store, loadRemote })
 
-  const router = useInternalRouter(initialPath, basePath)
+  const mountBase = path ?? basePath
+  // Keep the latest host bridges without rebuilding the adapter each render.
+  const pushRef = useRef<RouterBridge | undefined>(routerPush)
+  pushRef.current = routerPush
+  const replaceRef = useRef<RouterBridge | undefined>(routerReplace)
+  replaceRef.current = routerReplace
+  const adapter = useMemo<RouterAdapter>(() => {
+    if (routing === "path") {
+      return createPathAdapter({
+        base: mountBase,
+        routerPush: routerPush ? (to, meta) => pushRef.current?.(to, meta) : undefined,
+        routerReplace: routerReplace ? (to, meta) => replaceRef.current?.(to, meta) : undefined,
+      })
+    }
+    if (routing === "hash") return createHashAdapter()
+    return createVirtualAdapter(initialPath)
+    // provided-ness of routerPush/routerReplace and initialPath are captured once;
+    // callers must supply routing props stably (present-or-absent constant across renders).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routing, mountBase])
+  const router = useRouter(adapter, mountBase)
 
   const hostValue = useMemo<PluginHostValue>(
     () => ({

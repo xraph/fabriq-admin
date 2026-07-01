@@ -5,6 +5,7 @@ import { FabriqAdmin } from "./FabriqAdmin"
 import { FabriqClient } from "./client"
 import type { FabriqTransport } from "./client"
 import type { FabriqAdminPlugin } from "./plugin"
+import { definePlugin } from "./plugin"
 import { usePluginHost } from "./FabriqAdmin"
 import { localStoragePluginStore } from "./pluginStore"
 import type { NewRemotePluginSpec, RemotePluginSpec } from "./pluginStore"
@@ -526,5 +527,61 @@ describe("FabriqAdmin — dynamic plugin management", () => {
     const builtin = capturedHost!.plugins.find((p) => p.id === "consumer.builtin")
     expect(builtin?.status).toBe("loaded")
     expect(builtin?.source).toBe("builtin")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Routing props (Task 5: Clerk-style routing)
+// ---------------------------------------------------------------------------
+
+function urlTestClient(): FabriqClient {
+  const t = {
+    async request() { return {} },
+    async *stream() {},
+  } as unknown as FabriqTransport
+  return new FabriqClient({ baseUrl: "http://test", transport: t })
+}
+
+const urlPlugins = [
+  definePlugin({
+    id: "p.home", name: "Home", version: "0", capabilities: [],
+    navItems: [{ label: "Home", to: "", order: 0 }],
+    routes: [{ path: "", element: () => <div>HOME PAGE</div>, title: "Home" }],
+  }),
+  definePlugin({
+    id: "p.search", name: "Search", version: "0", capabilities: [],
+    navItems: [{ label: "Search", to: "search", order: 1 }],
+    routes: [{ path: "search", element: () => <div>SEARCH PAGE</div>, title: "Search" }],
+  }),
+]
+
+describe("FabriqAdmin routing=path", () => {
+  beforeEach(() => window.history.replaceState(null, "", "/"))
+
+  it("deep-links from the URL on mount", () => {
+    window.history.replaceState(null, "", "/admin/search")
+    render(<FabriqAdmin client={urlTestClient()} plugins={urlPlugins} routing="path" path="/admin" />)
+    expect(screen.getByText("SEARCH PAGE")).toBeTruthy()
+  })
+
+  it("responds to popstate (back/forward)", () => {
+    window.history.replaceState(null, "", "/admin")
+    render(<FabriqAdmin client={urlTestClient()} plugins={urlPlugins} routing="path" path="/admin" />)
+    expect(screen.getByText("HOME PAGE")).toBeTruthy()
+    act(() => {
+      window.history.replaceState(null, "", "/admin/search")
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
+    expect(screen.getByText("SEARCH PAGE")).toBeTruthy()
+  })
+
+  it("invokes routerPush on in-console navigation", () => {
+    window.history.replaceState(null, "", "/admin")
+    const routerPush = vi.fn()
+    render(
+      <FabriqAdmin client={urlTestClient()} plugins={urlPlugins} routing="path" path="/admin" routerPush={routerPush} />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: /^Search$/ }))
+    expect(routerPush).toHaveBeenCalledWith("/admin/search", expect.anything())
   })
 })
