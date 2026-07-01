@@ -4,9 +4,12 @@ import {
   usePluginHost,
   useTenantContext,
   useTenant,
+  useConfirm,
   HttpTransportError,
+  EntityTypeCombobox,
   type EntityRecord,
   type VectorMatch,
+  type VectorEmbeddingInfo,
 } from "@fabriq/admin-sdk"
 import {
   Card,
@@ -32,12 +35,13 @@ import { Search as SearchIcon } from "lucide-react"
 // Modes
 // ---------------------------------------------------------------------------
 
-type Mode = "text" | "semantic" | "similar"
+type Mode = "text" | "semantic" | "similar" | "manage"
 
 const MODES: { id: Mode; label: string }[] = [
   { id: "text", label: "Text" },
   { id: "semantic", label: "Semantic (text→vector)" },
   { id: "similar", label: "Similar to entity" },
+  { id: "manage", label: "Manage embeddings" },
 ]
 
 function isVectorMode(mode: Mode): boolean {
@@ -201,18 +205,20 @@ export function SearchPage() {
             ))}
           </div>
 
+          {mode === "manage" ? (
+            <VectorManage client={client} defaultType={type} onOpen={gotoEntity} />
+          ) : (
+          <>
           {/* Inputs */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="grid gap-1.5 sm:w-48">
               <label htmlFor="search-type" className="text-sm font-medium">
                 Entity type
               </label>
-              <Input
+              <EntityTypeCombobox
                 id="search-type"
-                aria-label="Entity type"
                 value={type}
-                onChange={(e) => setType(e.target.value)}
-                placeholder="product"
+                onChange={setType}
                 className="font-mono"
               />
             </div>
@@ -260,44 +266,50 @@ export function SearchPage() {
               />
             </div>
 
-            <Button type="button" onClick={handleRun} disabled={isSearching} className="gap-2">
+            <Button type="button" onClick={handleRun} disabled={isSearching} className="gap-2 self-end">
               <SearchIcon className="h-4 w-4" aria-hidden="true" />
               {isSearching ? "Searching…" : "Run"}
             </Button>
           </div>
 
           <TenantNote />
+          </>
+          )}
         </CardContent>
       </Card>
 
-      {hint && (
-        <Alert>
-          <AlertDescription>{hint}</AlertDescription>
-        </Alert>
-      )}
+      {mode !== "manage" && (
+        <>
+          {hint && (
+            <Alert>
+              <AlertDescription>{hint}</AlertDescription>
+            </Alert>
+          )}
 
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>
-            <span className="font-medium">
-              {error.notConfigured ? "Not configured" : "Search failed"}
-            </span>
-            <span className="block text-xs mt-1 opacity-80">{error.message}</span>
-          </AlertDescription>
-        </Alert>
-      )}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                <span className="font-medium">
+                  {error.notConfigured ? "Not configured" : "Search failed"}
+                </span>
+                <span className="block text-xs mt-1 opacity-80">{error.message}</span>
+              </AlertDescription>
+            </Alert>
+          )}
 
-      {!result && !error && !hint && (
-        <p className="text-sm text-muted-foreground">
-          Run a search to see ranked results here.
-        </p>
-      )}
+          {!result && !error && !hint && (
+            <p className="text-sm text-muted-foreground">
+              Run a search to see ranked results here.
+            </p>
+          )}
 
-      {result?.kind === "text" && (
-        <TextResults items={result.items} onOpen={gotoEntity} />
-      )}
-      {result?.kind === "vector" && (
-        <VectorResults matches={result.matches} onOpen={gotoEntity} />
+          {result?.kind === "text" && (
+            <TextResults items={result.items} onOpen={gotoEntity} />
+          )}
+          {result?.kind === "vector" && (
+            <VectorResults matches={result.matches} onOpen={gotoEntity} />
+          )}
+        </>
       )}
     </div>
   )
@@ -374,6 +386,193 @@ function TextResults({
 // ---------------------------------------------------------------------------
 // VectorResults
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// VectorManage — inspect / delete stored embeddings (the write side of the
+// vector plane). Destructive actions are gated behind a native confirm; they
+// remove embeddings only (the source rows stay, rebuildable by re-indexing).
+// ---------------------------------------------------------------------------
+
+function vecErr(err: unknown): string {
+  if (err instanceof HttpTransportError) {
+    if (err.status === 404) return "No embedding stored for that entity/id."
+    if (err.status === 501) return "Vector is not configured on this instance."
+    if (err.status === 400) return "Request rejected — check the fields."
+  }
+  return err instanceof Error ? err.message : String(err)
+}
+
+function VectorManage({
+  client,
+  defaultType,
+  onOpen,
+}: {
+  client: ReturnType<typeof useFabriqClient>
+  defaultType: string
+  onOpen: (id: string) => void
+}) {
+  const confirm = useConfirm()
+  const [entity, setEntity] = useState(defaultType || "product")
+  const [id, setId] = useState("")
+  const [info, setInfo] = useState<VectorEmbeddingInfo | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null)
+
+  const [dbmEntity, setDbmEntity] = useState(defaultType || "product")
+  const [metaKey, setMetaKey] = useState("")
+  const [metaVal, setMetaVal] = useState("")
+
+  async function inspect() {
+    if (!entity.trim() || !id.trim()) {
+      setMsg({ kind: "err", text: "Enter an entity type and id." })
+      return
+    }
+    setMsg(null)
+    setInfo(null)
+    setBusy(true)
+    try {
+      setInfo(await client.vectorGet(entity.trim(), id.trim()))
+    } catch (err) {
+      setMsg({ kind: "err", text: vecErr(err) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteOne() {
+    if (
+      !(await confirm({
+        title: `Delete the embedding for ${entity}/${id}?`,
+        description: "The source row stays — only its vector is removed (rebuildable by re-indexing).",
+        confirmText: "Delete",
+        destructive: true,
+      }))
+    ) {
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+    try {
+      await client.vectorDelete(entity.trim(), id.trim())
+      setInfo(null)
+      setMsg({ kind: "ok", text: `Deleted embedding for ${entity}/${id}.` })
+    } catch (err) {
+      setMsg({ kind: "err", text: vecErr(err) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteByMeta() {
+    const key = metaKey.trim()
+    const val = metaVal.trim()
+    if (!key) {
+      setMsg({ kind: "err", text: "Enter a meta key and value to match." })
+      return
+    }
+    if (
+      !(await confirm({
+        title: `Delete ALL ${dbmEntity} embeddings where meta ${key} = "${val}"?`,
+        description: "This cannot be undone (rebuildable by re-indexing).",
+        confirmText: "Delete matching",
+        destructive: true,
+      }))
+    ) {
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+    try {
+      await client.vectorDeleteByMeta({ entity: dbmEntity.trim(), filter: { [key]: val } })
+      setMsg({ kind: "ok", text: `Deleted ${dbmEntity} embeddings matching ${key} = ${val}.` })
+    } catch (err) {
+      setMsg({ kind: "err", text: vecErr(err) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <p className="text-xs text-muted-foreground">
+        Inspect or remove stored embeddings. Deletes affect the vector index only — the source
+        entity rows are untouched and can be re-embedded by re-indexing.
+      </p>
+
+      {/* Inspect / delete one */}
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="grid gap-1.5 sm:w-48">
+            <label htmlFor="vm-entity" className="text-sm font-medium">Entity type</label>
+            <EntityTypeCombobox id="vm-entity" value={entity} onChange={setEntity} className="font-mono" />
+          </div>
+          <div className="grid gap-1.5 flex-1">
+            <label htmlFor="vm-id" className="text-sm font-medium">Entity id</label>
+            <Input id="vm-id" value={id} onChange={(e) => setId(e.target.value)}
+              placeholder="row id" className="font-mono" />
+          </div>
+          <Button type="button" onClick={inspect} disabled={busy} className="self-end">
+            {busy ? "…" : "Inspect"}
+          </Button>
+        </div>
+
+        {info && (
+          <div className="rounded-md border border-border p-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Badge variant="secondary">{info.dims} dims</Badge>
+              <Badge variant="outline" className="font-mono">‖v‖ = {info.norm.toFixed(4)}</Badge>
+              <button type="button" className="font-mono text-xs hover:underline"
+                onClick={() => onOpen(info.id)} title="Open entity">
+                {info.entity}/{info.id}
+              </button>
+            </div>
+            <div className="font-mono text-xs text-muted-foreground overflow-x-auto">
+              [{info.preview.map((v) => v.toFixed(4)).join(", ")}, …]
+            </div>
+            <Button type="button" variant="destructive" size="sm" onClick={deleteOne} disabled={busy}>
+              Delete this embedding
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Delete by meta */}
+      <div className="space-y-3 border-t border-border pt-4">
+        <div>
+          <p className="text-sm font-medium">Delete by meta</p>
+          <p className="text-xs text-muted-foreground">
+            Remove every embedding for an entity whose meta matches a key/value (AND-of-equals).
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="grid gap-1.5 sm:w-40">
+            <label htmlFor="vm-dbm-entity" className="text-sm font-medium">Entity type</label>
+            <EntityTypeCombobox id="vm-dbm-entity" value={dbmEntity} onChange={setDbmEntity} className="font-mono" />
+          </div>
+          <div className="grid gap-1.5 sm:w-40">
+            <label htmlFor="vm-meta-key" className="text-sm font-medium">Meta key</label>
+            <Input id="vm-meta-key" value={metaKey} onChange={(e) => setMetaKey(e.target.value)}
+              placeholder="e.g. status" className="font-mono" />
+          </div>
+          <div className="grid gap-1.5 flex-1">
+            <label htmlFor="vm-meta-val" className="text-sm font-medium">Meta value</label>
+            <Input id="vm-meta-val" value={metaVal} onChange={(e) => setMetaVal(e.target.value)}
+              placeholder="e.g. archived" className="font-mono" />
+          </div>
+          <Button type="button" variant="destructive" onClick={deleteByMeta} disabled={busy} className="self-end">
+            Delete matching
+          </Button>
+        </div>
+      </div>
+
+      {msg && (
+        <Alert variant={msg.kind === "err" ? "destructive" : "default"}>
+          <AlertDescription>{msg.text}</AlertDescription>
+        </Alert>
+      )}
+    </div>
+  )
+}
 
 function VectorResults({
   matches,

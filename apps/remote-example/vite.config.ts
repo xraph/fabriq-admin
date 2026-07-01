@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url"
 import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import federation from "@originjs/vite-plugin-federation"
@@ -12,6 +13,14 @@ import federation from "@originjs/vite-plugin-federation"
  * across the boundary is the core correctness requirement.
  */
 export default defineConfig({
+  resolve: {
+    alias: {
+      // @fabriq/ui's source uses the shadcn "@/..." convention for its own
+      // internal imports. Since this app bundles that source directly, the
+      // resolver must map "@" to the ui package's src (same as the host).
+      "@": fileURLToPath(new URL("../../packages/ui/src", import.meta.url)),
+    },
+  },
   plugins: [
     react(),
     federation({

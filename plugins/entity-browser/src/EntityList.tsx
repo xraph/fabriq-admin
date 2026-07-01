@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import {
   useFabriqQuery,
   useFabriqClient,
@@ -7,21 +7,9 @@ import {
   type EntityRecord,
 } from "@fabriq/admin-sdk"
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
   Input,
   Badge,
   Button,
-  Skeleton,
   Alert,
   AlertTitle,
   AlertDescription,
@@ -30,17 +18,132 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DataGrid,
+  DataGridContainer,
+  DataGridTable,
+  DataGridColumnHeader,
 } from "@fabriq/ui"
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table"
 import { Search, Database, Plus } from "lucide-react"
 import { EntityForm } from "./EntityForm"
 
 const PAGE_LIMIT = 50
 
-export function EntityList() {
-  const [type, setType] = useState("")
+// Structural columns that live on every row but aren't interesting to browse as
+// data columns (they render as the id column / a badge instead).
+const STRUCTURAL = new Set(["id", "tenant_id", "version"])
+
+function titleCase(s: string): string {
+  return s.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/
+
+/** Render one cell value, formatted by its declared schema kind. */
+function CellValue({ value, kind }: { value: unknown; kind?: string }) {
+  if (value === null || value === undefined || value === "") {
+    return <span className="text-muted-foreground">—</span>
+  }
+  if (typeof value === "boolean") {
+    return (
+      <Badge variant={value ? "secondary" : "outline"} className="font-mono text-xs">
+        {value ? "true" : "false"}
+      </Badge>
+    )
+  }
+  if (typeof value === "object") {
+    return (
+      <span className="font-mono text-xs text-muted-foreground">
+        {JSON.stringify(value)}
+      </span>
+    )
+  }
+  // Timestamps: honour the declared kind, and also detect ISO date-time strings
+  // (dynamic-entity columns often report a generic text kind).
+  const isTime =
+    kind === "time" ||
+    kind === "timestamp" ||
+    (typeof value === "string" && ISO_DATETIME.test(value))
+  if (isTime) {
+    const d = new Date(String(value))
+    if (!Number.isNaN(d.getTime())) {
+      return <span className="whitespace-nowrap text-sm tabular-nums">{d.toLocaleString()}</span>
+    }
+  }
+  if (typeof value === "number") {
+    // Trim float noise (e.g. 32.989999999999995 → 32.99) without lying about ints.
+    const display = Number.isInteger(value) ? value : Math.round(value * 10000) / 10000
+    return <span className="font-mono text-sm tabular-nums">{display}</span>
+  }
+  return <span className="whitespace-nowrap text-sm">{String(value)}</span>
+}
+
+/**
+ * Detect a reference column: a field named `<type>Id` / `<type>_id` whose base
+ * (`<type>`) matches a KNOWN entity type. Returns the canonical known type to
+ * link to, or null when the column is not a resolvable reference.
+ */
+function referenceTypeFor(field: string, known: string[]): string | null {
+  const m = field.match(/^(.*?)_?id$/i)
+  const base = m?.[1]?.toLowerCase()
+  if (!base) return null
+  return known.find((t) => t.toLowerCase() === base) ?? null
+}
+
+/** A reference cell: the value is a clickable link to that entity's detail. */
+function ReferenceCell({
+  value,
+  type,
+  navigate,
+}: {
+  value: unknown
+  type: string
+  navigate: (to: string) => void
+}) {
+  if (value === null || value === undefined || value === "") {
+    return <span className="text-muted-foreground">—</span>
+  }
+  const v = String(value)
+  const go = () =>
+    navigate("entities/" + encodeURIComponent(type) + "/" + encodeURIComponent(v))
+  return (
+    <a
+      role="link"
+      tabIndex={0}
+      title={`Open ${type} ${v}`}
+      // Stop propagation so the reference link wins over the row's own click
+      // (which navigates to THIS entity, not the referenced one).
+      onClick={(e) => {
+        e.stopPropagation()
+        go()
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          e.stopPropagation()
+          go()
+        }
+      }}
+      className="cursor-pointer whitespace-nowrap font-mono text-xs text-primary hover:underline"
+    >
+      {v}
+    </a>
+  )
+}
+
+export function EntityList({ params }: { params?: { type?: string } } = {}) {
+  const initialType = params?.type ? decodeURIComponent(params.type) : ""
+  const [type, setType] = useState(initialType)
   const [cursor, setCursor] = useState<string | undefined>(undefined)
   // Accumulated items per type — keyed by type string
   const [accumulated, setAccumulated] = useState<Record<string, EntityRecord[]>>({})
+  const [sorting, setSorting] = useState<SortingState>([])
   const { navigate } = usePluginHost()
   const client = useFabriqClient()
   const queryClient = useQueryClient()
@@ -54,6 +157,13 @@ export function EntityList() {
   const { data: knownTypes } = useFabriqQuery(
     ["entity-types"],
     (c) => c.listEntityTypes(),
+  )
+
+  // Schema for the selected type — drives the data-grid columns.
+  const { data: schema } = useFabriqQuery(
+    ["entity-schema", trimmedType],
+    (c) => c.getEntitySchema(trimmedType),
+    { enabled: trimmedType.length > 0, retry: false },
   )
 
   // Reset to the first page and refetch it. The page-0 effect below replaces
@@ -78,6 +188,7 @@ export function EntityList() {
   useEffect(() => {
     setCursor(undefined)
     setAccumulated({})
+    setSorting([])
   }, [trimmedType])
 
   const { data, isLoading, isError } = useFabriqQuery(
@@ -92,8 +203,7 @@ export function EntityList() {
   )
 
   // Fold the arrived page into the accumulated list:
-  //  - first page (empty cursor): REPLACE — so refetches after a create/edit/delete
-  //    repopulate correctly instead of being deduped away.
+  //  - first page (empty cursor): REPLACE.
   //  - subsequent pages (Load more): APPEND, deduped by id.
   useEffect(() => {
     if (!data || !trimmedType) return
@@ -111,25 +221,103 @@ export function EntityList() {
 
   const items = accumulated[trimmedType] ?? []
   const nextCursor = data?.nextCursor
-
   const isFirstLoad = isLoading && items.length === 0
   const isLoadingMore = isLoading && items.length > 0
 
-  function handleLoadMore() {
-    if (nextCursor) {
-      setCursor(nextCursor)
+  // Infinite scroll: auto-load the next page when a sentinel near the bottom of
+  // the grid's scroll area comes into view (replaces a manual "Load more").
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const root = scrollRef.current
+    const sentinel = sentinelRef.current
+    if (!root || !sentinel || !nextCursor) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        // Guard on nextCursor + !isLoading so we fire once per page, not per pixel.
+        if (entries[0]?.isIntersecting && nextCursor && !isLoading) {
+          setCursor(nextCursor)
+        }
+      },
+      { root, rootMargin: "300px" },
+    )
+    io.observe(sentinel)
+    return () => io.disconnect()
+    // `items.length` is in the deps because the sentinel only mounts once the
+    // grid renders (items > 0), which happens a render AFTER nextCursor is set;
+    // without it the observer would never attach to the sentinel.
+  }, [nextCursor, isLoading, items.length])
+
+  // Column definitions built from the type schema (falling back to the union of
+  // the loaded rows' data keys when a type has no formal schema).
+  const columns = useMemo<ColumnDef<EntityRecord>[]>(() => {
+    let fields: { name: string; kind: string }[] =
+      schema?.fields
+        ?.filter((f) => !STRUCTURAL.has(f.name))
+        .map((f) => ({ name: f.name, kind: f.kind })) ?? []
+
+    if (fields.length === 0 && items.length > 0) {
+      const keys = new Set<string>()
+      for (const it of items.slice(0, 25)) {
+        for (const k of Object.keys(it.data ?? {})) {
+          if (!STRUCTURAL.has(k)) keys.add(k)
+        }
+      }
+      fields = [...keys].map((name) => ({ name, kind: "" }))
     }
-  }
+
+    const cols: ColumnDef<EntityRecord>[] = [
+      {
+        id: "id",
+        accessorFn: (row) => row.id,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="ID" />,
+        cell: (info) => (
+          <span className="whitespace-nowrap font-mono text-xs">{String(info.getValue() ?? "")}</span>
+        ),
+        meta: { headerTitle: "ID" },
+        size: 250,
+      },
+      ...fields.map((f): ColumnDef<EntityRecord> => {
+        const refType = referenceTypeFor(f.name, knownTypes ?? [])
+        return {
+          id: f.name,
+          accessorFn: (row) => (row.data ?? {})[f.name],
+          header: ({ column }) => (
+            <DataGridColumnHeader column={column} title={titleCase(f.name)} />
+          ),
+          cell: refType
+            ? (info) => (
+                <ReferenceCell value={info.getValue()} type={refType} navigate={navigate} />
+              )
+            : (info) => <CellValue value={info.getValue()} kind={f.kind} />,
+          meta: { headerTitle: titleCase(f.name) },
+        }
+      }),
+    ]
+    return cols
+  }, [schema, items, knownTypes, navigate])
+
+  const table = useReactTable({
+    data: items,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getRowId: (row) => row.id,
+  })
+
+  const showGrid = trimmedType.length > 0 && !isError && (items.length > 0 || isFirstLoad)
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Entities</CardTitle>
-        <CardDescription>Browse entities by type</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {/* Type filter toolbar */}
-        <div className="mb-4">
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Entities</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Browse entities by type</p>
+      </div>
+
+      {/* Type filter toolbar */}
+      <div>
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -143,10 +331,7 @@ export function EntityList() {
               />
             </div>
             {trimmedType.length > 0 && (
-              <Button
-                onClick={() => setCreateOpen(true)}
-                aria-label={`New ${trimmedType}`}
-              >
+              <Button onClick={() => setCreateOpen(true)} aria-label={`New ${trimmedType}`}>
                 <Plus className="h-4 w-4 mr-1" />
                 New {trimmedType}
               </Button>
@@ -200,29 +385,6 @@ export function EntityList() {
           </div>
         )}
 
-        {/* Loading state (first page only) */}
-        {trimmedType.length > 0 && isFirstLoad && (
-          <div role="status" aria-label="Loading">
-            <span className="sr-only">Loading</span>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Type</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[1, 2, 3].map((i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-
         {/* Error state */}
         {trimmedType.length > 0 && isError && items.length === 0 && (
           <Alert variant="destructive">
@@ -234,69 +396,82 @@ export function EntityList() {
         )}
 
         {/* Empty state — type entered, query resolved, zero items */}
-        {trimmedType.length > 0 && !isFirstLoad && !isError && items.length === 0 && !isLoading && (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
-            <Database className="h-8 w-8 opacity-40" />
-            <p>No entities of type <strong>{trimmedType}</strong> found.</p>
-          </div>
-        )}
+        {trimmedType.length > 0 &&
+          !isFirstLoad &&
+          !isError &&
+          items.length === 0 &&
+          !isLoading && (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+              <Database className="h-8 w-8 opacity-40" />
+              <p>
+                No entities of type <strong>{trimmedType}</strong> found.
+              </p>
+            </div>
+          )}
 
-        {/* Data table */}
-        {trimmedType.length > 0 && items.length > 0 && (
+        {/* Schema-driven data grid */}
+        {showGrid && (
           <>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">
-                {nextCursor
-                  ? `${items.length}+ loaded`
-                  : `${items.length} ${items.length === 1 ? "entity" : "entities"}`}
+                {isFirstLoad
+                  ? "Loading…"
+                  : nextCursor
+                    ? `${items.length}+ loaded`
+                    : `${items.length} ${items.length === 1 ? "entity" : "entities"}`}
               </span>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Type</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((entity) => (
-                  <TableRow
-                    key={entity.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() =>
-                      navigate(
-                        "entities/" +
-                          encodeURIComponent(entity.type) +
-                          "/" +
-                          encodeURIComponent(entity.id),
-                      )
-                    }
-                  >
-                    <TableCell className="font-mono">{entity.id}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{entity.type}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
 
-            {/* Load more button */}
-            {nextCursor && (
-              <div className="flex justify-center mt-4">
-                <Button
-                  variant="outline"
-                  onClick={handleLoadMore}
-                  disabled={isLoadingMore}
-                  aria-label="Load more"
-                >
-                  {isLoadingMore ? "Loading..." : "Load more"}
-                </Button>
-              </div>
-            )}
+            <DataGrid
+              table={table}
+              recordCount={items.length}
+              isLoading={isFirstLoad}
+              onRowClick={(row) =>
+                navigate(
+                  "entities/" +
+                    encodeURIComponent(row.type) +
+                    "/" +
+                    encodeURIComponent(row.id),
+                )
+              }
+              tableLayout={{
+                dense: true,
+                rowBorder: true,
+                headerBackground: true,
+                headerBorder: true,
+                headerSticky: true,
+                width: "auto",
+              }}
+              tableClassNames={{ headerSticky: "sticky top-0 z-20 bg-background" }}
+              emptyMessage="No entities."
+            >
+              <DataGridContainer>
+                {/* Bounded scroll area: hosts the sticky header AND the
+                    infinite-scroll sentinel/observer root. */}
+                <div ref={scrollRef} className="max-h-[calc(100vh-18rem)] overflow-auto">
+                  <DataGridTable />
+                  {/* Sentinel: scrolling it into view auto-loads the next page. */}
+                  <div ref={sentinelRef} aria-hidden="true" className="h-px w-full" />
+                  {isLoadingMore && (
+                    <div
+                      className="flex justify-center py-3 text-xs text-muted-foreground"
+                      role="status"
+                      aria-label="Loading more"
+                    >
+                      Loading more…
+                    </div>
+                  )}
+                  {!nextCursor && items.length > 0 && (
+                    <div className="py-3 text-center text-xs text-muted-foreground">
+                      End of results · {items.length}{" "}
+                      {items.length === 1 ? "entity" : "entities"}
+                    </div>
+                  )}
+                </div>
+              </DataGridContainer>
+            </DataGrid>
           </>
         )}
-      </CardContent>
-    </Card>
+    </div>
   )
 }

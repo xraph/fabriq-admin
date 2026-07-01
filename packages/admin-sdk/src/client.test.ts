@@ -391,6 +391,55 @@ describe("FabriqClient", () => {
     ).rejects.toMatchObject({ status: 501 })
   })
 
+  it("recall — POST /recall forwards the body and returns the pack", async () => {
+    const transport = new FakeTransport()
+    const pack = {
+      items: [
+        {
+          entity: "product",
+          id: "p1",
+          row: { name: "Widget" },
+          score: 3.2,
+          source: ["vector", "search"],
+          tokens: 42,
+        },
+      ],
+      omitted: 1,
+      tokens: 42,
+      warnings: ["graph channel skipped"],
+    }
+    transport.setRequestResponse(pack)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.recall({
+      query: "active product",
+      entities: ["product", "customer"],
+      budget: 2000,
+      k: 10,
+    })
+
+    expect(result).toEqual(pack)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/recall")
+    expect(transport.lastRequest?.body).toEqual({
+      query: "active product",
+      entities: ["product", "customer"],
+      budget: 2000,
+      k: 10,
+    })
+  })
+
+  it("recall — surfaces a 501 (not configured) as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(
+      new HttpTransportError(501, '{"error":"recall not configured"}'),
+    )
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await expect(client.recall({ query: "x" })).rejects.toMatchObject({ status: 501 })
+  })
+
   it("watch — calls stream with /watch path and yields events", async () => {
     const transport = new FakeTransport()
     const events = [{ type: "delta", id: "1" }, { type: "delta", id: "2" }]
@@ -666,5 +715,108 @@ describe("FabriqClient", () => {
     )
     const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
     await expect(client.getCrdtDocument("welcome")).rejects.toMatchObject({ status: 501 })
+  })
+
+  // -------------------------------------------------------------------------
+  // Distillation (DigestNode Merkle tree) plane
+  // -------------------------------------------------------------------------
+
+  it("distillMap — calls GET /distill/map and returns the digest map", async () => {
+    const transport = new FakeTransport()
+    const map = {
+      rootId: "digest:2:tenant",
+      nodes: [{ id: "digest:2:tenant", level: 2, childCount: 2 }],
+    }
+    transport.setRequestResponse(map)
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    const result = await client.distillMap()
+    expect(result).toEqual(map)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/distill/map")
+  })
+
+  it("distillMap — surfaces a 501 (plane not configured) as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(
+      new HttpTransportError(501, '{"error":"distillation not configured"}'),
+    )
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await expect(client.distillMap()).rejects.toMatchObject({ status: 501 })
+  })
+
+  it("distillNode — calls GET /distill/node/:id KEEPING the colons (backend matches the raw id)", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({
+      node: { id: "digest:2:tenant", level: 2 },
+      summary: "root",
+      children: [],
+    })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    const result = await client.distillNode("digest:2:tenant")
+    expect(result.node.id).toBe("digest:2:tenant")
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    // Colons are preserved (encoding them to %3A would 404 against the route).
+    expect(transport.lastRequest?.path).toBe(
+      "http://localhost:9000/distill/node/digest:2:tenant",
+    )
+    expect(transport.lastRequest?.path).not.toContain("%3A")
+  })
+
+  it("distillNode — surfaces a 404 (node absent) as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(new HttpTransportError(404, '{"error":"not found"}'))
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await expect(client.distillNode("digest:0:missing")).rejects.toMatchObject({
+      status: 404,
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Live query (live tail)
+  // -------------------------------------------------------------------------
+
+  it("liveSubscribe — calls stream with /live path + body and yields snapshot then delta", async () => {
+    const transport = new FakeTransport()
+    const events = [
+      { type: "snapshot", rows: [{ id: "a" }] },
+      { type: "delta", op: "insert", id: "b", row: { name: "X" } },
+    ]
+    transport.setStreamEvents(events)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const collected: unknown[] = []
+    for await (const event of client.liveSubscribe({ entity: "product" })) {
+      collected.push(event)
+    }
+
+    expect(transport.lastStream?.path).toBe("http://localhost:9000/live")
+    expect(transport.lastStream?.body).toEqual({ entity: "product" })
+    expect(collected).toEqual(events)
+  })
+
+  it("liveSubscribe — forwards filter/limit + the abort signal to stream", async () => {
+    const transport = new FakeTransport()
+    transport.setStreamEvents([])
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const controller = new AbortController()
+    // Drain the iterable so the generator body runs and records lastStream.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for await (const _ of client.liveSubscribe(
+      { entity: "order", filter: { status: "open" }, limit: 50 },
+      controller.signal,
+    )) {
+      // no events
+    }
+
+    expect(transport.lastStream?.path).toBe("http://localhost:9000/live")
+    expect(transport.lastStream?.body).toEqual({
+      entity: "order",
+      filter: { status: "open" },
+      limit: 50,
+    })
+    expect(transport.lastStream?.signal).toBe(controller.signal)
   })
 })

@@ -9,6 +9,7 @@
 @source "../../../packages/admin-sdk/src";
 @source "../../../plugins/entity-browser/src";
 @source "../../../plugins/plugins-manager/src";
+@source "../../../plugins/telemetry/src";
 @source "../../../apps/remote-example/src";
 
 /* Host-app layout only (the admin library itself owns no global styles). */

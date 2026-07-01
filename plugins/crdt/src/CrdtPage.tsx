@@ -154,7 +154,7 @@ export function CrdtPage() {
                 className="font-mono"
               />
             </div>
-            <Button type="submit" className="gap-2">
+            <Button type="submit" className="gap-2 self-end">
               <Play className="h-4 w-4" aria-hidden="true" />
               Load
             </Button>

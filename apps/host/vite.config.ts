@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from "node:url"
 import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import federation from "@originjs/vite-plugin-federation"
@@ -20,6 +21,16 @@ import tailwindcss from "@tailwindcss/vite"
  * remotes are registered at runtime by URL.
  */
 export default defineConfig({
+  resolve: {
+    alias: {
+      // @fabriq/ui's source uses the shadcn "@/..." convention for its own
+      // internal modules (e.g. "@/lib/utils", "@/components/ui/button"). Because
+      // the package is consumed as raw source (main: ./src/index.ts), the host's
+      // resolver must map "@" to the ui package's src. No other package in the
+      // repo uses "@/...", so this alias is unambiguous.
+      "@": fileURLToPath(new URL("../../packages/ui/src", import.meta.url)),
+    },
+  },
   plugins: [
     tailwindcss(),
     react(),

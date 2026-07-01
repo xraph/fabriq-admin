@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import React from "react"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import {
   FabriqClient,
   FabriqAdmin,
@@ -85,8 +85,13 @@ describe("entityBrowserPlugin shape", () => {
     expect(entityBrowserPlugin.id).toBe("fabriq.entity-browser")
   })
 
-  it("has exactly 2 routes", () => {
-    expect(entityBrowserPlugin.routes).toHaveLength(2)
+  it("has exactly 3 routes", () => {
+    expect(entityBrowserPlugin.routes).toHaveLength(3)
+  })
+
+  it("has an entities/:type list route", () => {
+    const r = entityBrowserPlugin.routes.find((x) => x.path === "entities/:type")
+    expect(r).toBeDefined()
   })
 
   it("has exactly 1 navItem", () => {
@@ -98,12 +103,23 @@ describe("entityBrowserPlugin shape", () => {
   })
 
   it("detail route uses entities/:type/:id pattern", () => {
-    const detailRoute = entityBrowserPlugin.routes.find((r) => r.path !== "entities")
+    const detailRoute = entityBrowserPlugin.routes.find((r) => r.path === "entities/:type/:id")
     expect(detailRoute?.path).toBe("entities/:type/:id")
   })
 })
 
 describe("EntityList", () => {
+  it("seeds the type from the entities/:type route param and lists immediately", async () => {
+    const client = makeFakeClient()
+    render(
+      <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities/node" />,
+    )
+    // No need to type a type — rows appear because the param seeded it.
+    await screen.findByText("ent-1")
+    await screen.findByText("ent-2")
+    expect(screen.queryByText(/enter an entity type to browse/i)).toBeNull()
+  })
+
   it("shows type prompt before a type is entered", () => {
     const client = makeFakeClient()
     render(
@@ -195,40 +211,70 @@ describe("EntityList", () => {
 })
 
 describe("EntityList pagination", () => {
-  it("shows Load more button when nextCursor present, appends rows on click, hides when done", async () => {
-    const paginatedTransport: FabriqTransport = {
-      async request<T>(reqOpts: { path: string; query?: Record<string, string | number | undefined> }): Promise<T> {
-        const { path, query } = reqOpts
-        if (path.includes("/entities") && !path.match(/\/entities\/.+/)) {
-          const cursor = query?.cursor
-          if (!cursor) {
-            const page: EntityPage = { items: [ENTITY_A, ENTITY_B], nextCursor: "50" }
-            return page as unknown as T
-          } else {
-            const page: EntityPage = { items: [ENTITY_C], nextCursor: "" }
-            return page as unknown as T
-          }
-        }
-        return {} as T
-      },
-      async *stream(): AsyncIterable<unknown> {},
+  it("auto-loads the next page via the infinite-scroll sentinel, appending rows until done", async () => {
+    // The list uses an IntersectionObserver sentinel (not a "Load more" button);
+    // jsdom has no IO, so install a controllable mock that lets us fire the
+    // intersection callback on demand.
+    const observers: Array<() => void> = []
+    class MockIO {
+      private cb: IntersectionObserverCallback
+      constructor(cb: IntersectionObserverCallback) {
+        this.cb = cb
+        observers.push(() =>
+          this.cb(
+            [{ isIntersecting: true } as IntersectionObserverEntry],
+            this as unknown as IntersectionObserver,
+          ),
+        )
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return []
+      }
     }
-    const client = new FabriqClient({ baseUrl: "http://test", transport: paginatedTransport })
-    render(
-      <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />,
-    )
-    const input = screen.getByRole("textbox", { name: /entity type/i })
-    fireEvent.change(input, { target: { value: "node" } })
-    await screen.findByText("ent-1")
-    await screen.findByText("ent-2")
-    expect(screen.queryByText("ent-3")).toBeNull()
-    const loadMore = await screen.findByRole("button", { name: /load more/i })
-    expect(loadMore).toBeTruthy()
-    fireEvent.click(loadMore)
-    await screen.findByText("ent-3")
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /load more/i })).toBeNull()
-    })
+    const prevIO = window.IntersectionObserver
+    window.IntersectionObserver = MockIO as unknown as typeof IntersectionObserver
+
+    try {
+      const paginatedTransport: FabriqTransport = {
+        async request<T>(reqOpts: { path: string; query?: Record<string, string | number | undefined> }): Promise<T> {
+          const { path, query } = reqOpts
+          if (path.includes("/entities") && !path.match(/\/entities\/.+/)) {
+            const cursor = query?.cursor
+            if (!cursor) {
+              const page: EntityPage = { items: [ENTITY_A, ENTITY_B], nextCursor: "50" }
+              return page as unknown as T
+            } else {
+              const page: EntityPage = { items: [ENTITY_C], nextCursor: "" }
+              return page as unknown as T
+            }
+          }
+          return {} as T
+        },
+        async *stream(): AsyncIterable<unknown> {},
+      }
+      const client = new FabriqClient({ baseUrl: "http://test", transport: paginatedTransport })
+      render(
+        <FabriqAdmin client={client} plugins={[entityBrowserPlugin]} initialPath="entities" />,
+      )
+      const input = screen.getByRole("textbox", { name: /entity type/i })
+      fireEvent.change(input, { target: { value: "node" } })
+      await screen.findByText("ent-1")
+      await screen.findByText("ent-2")
+      expect(screen.queryByText("ent-3")).toBeNull()
+
+      // Fire the sentinel intersection → the next page loads and appends ent-3.
+      // Fire every registered observer (the sentinel's IO may not be the last
+      // one created) until the next page arrives.
+      await act(async () => {
+        observers.forEach((fire) => fire())
+      })
+      await screen.findByText("ent-3")
+    } finally {
+      window.IntersectionObserver = prevIO
+    }
   })
 
   it("resets accumulated items when type changes", async () => {

@@ -5,6 +5,7 @@ import { FabriqAdmin } from "./FabriqAdmin"
 import { FabriqClient } from "./client"
 import type { FabriqTransport } from "./client"
 import type { FabriqAdminPlugin } from "./plugin"
+import { definePlugin } from "./plugin"
 import { usePluginHost } from "./FabriqAdmin"
 import { localStoragePluginStore } from "./pluginStore"
 import type { NewRemotePluginSpec, RemotePluginSpec } from "./pluginStore"
@@ -82,8 +83,8 @@ describe("FabriqAdmin", () => {
 
     render(<FabriqAdmin client={client} plugins={[plugin]} />)
 
-    // Nav button should be rendered
-    const navBtn = screen.getByRole("button", { name: /entities/i })
+    // Nav button should be rendered — use exact name to distinguish from NavEntities "More entities" button
+    const navBtn = screen.getByRole("button", { name: /^entities$/i })
     expect(navBtn).toBeTruthy()
 
     // Click to navigate
@@ -188,7 +189,7 @@ describe("FabriqAdmin", () => {
     expect(div?.getAttribute("data-fabriq-theme")).toBe("light")
   })
 
-  it("(theme) clicking theme toggle flips data-fabriq-theme from light to dark", () => {
+  it("(theme) toggles theme via the footer settings menu", async () => {
     const client = makeFakeClient()
     const plugin: FabriqAdminPlugin = {
       id: "test-plugin",
@@ -204,32 +205,17 @@ describe("FabriqAdmin", () => {
     // Initially light
     expect(div?.getAttribute("data-fabriq-theme")).toBe("light")
 
-    // Find and click the theme toggle button
-    const toggleBtn = screen.getByRole("button", { name: /toggle theme/i })
-    fireEvent.click(toggleBtn)
+    // Open the footer settings menu
+    fireEvent.click(screen.getByRole("button", { name: /settings/i }))
 
-    expect(div?.getAttribute("data-fabriq-theme")).toBe("dark")
-  })
+    // Select dark theme via the radio item
+    const dark = await screen.findByRole("menuitemradio", { name: /^dark$/i })
+    fireEvent.click(dark)
 
-  it("(theme) clicking theme toggle flips data-fabriq-theme from dark to light", () => {
-    const client = makeFakeClient()
-    const plugin: FabriqAdminPlugin = {
-      id: "test-plugin",
-      name: "Test Plugin",
-      version: "1.0.0",
-      routes: [{ path: "home", element: ListEl }],
-      navItems: [{ label: "Home", to: "home" }],
-    }
-    const { container } = render(
-      <FabriqAdmin client={client} plugins={[plugin]} theme="dark" />
-    )
-    const div = container.querySelector(".fabriq-admin")
-    expect(div?.getAttribute("data-fabriq-theme")).toBe("dark")
-
-    const toggleBtn = screen.getByRole("button", { name: /toggle theme/i })
-    fireEvent.click(toggleBtn)
-
-    expect(div?.getAttribute("data-fabriq-theme")).toBe("light")
+    // Root reflects dark theme
+    await waitFor(() => {
+      expect(document.querySelector(".fabriq-admin")?.getAttribute("data-fabriq-theme")).toBe("dark")
+    })
   })
 
   // -------------------------------------------------------------------------
@@ -255,8 +241,9 @@ describe("FabriqAdmin", () => {
       <FabriqAdmin client={client} plugins={[plugin]} initialPath="entities" />
     )
 
-    const entitiesBtn = screen.getByRole("button", { name: /entities/i })
-    const homeBtn = screen.getByRole("button", { name: /home/i })
+    // Use exact name to distinguish Platform nav buttons from NavEntities "More entities" button
+    const entitiesBtn = screen.getByRole("button", { name: /^entities$/i })
+    const homeBtn = screen.getByRole("button", { name: /^home$/i })
 
     // Active item gets aria-current="page"
     expect(entitiesBtn.getAttribute("aria-current")).toBe("page")
@@ -540,5 +527,61 @@ describe("FabriqAdmin — dynamic plugin management", () => {
     const builtin = capturedHost!.plugins.find((p) => p.id === "consumer.builtin")
     expect(builtin?.status).toBe("loaded")
     expect(builtin?.source).toBe("builtin")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Routing props (Task 5: Clerk-style routing)
+// ---------------------------------------------------------------------------
+
+function urlTestClient(): FabriqClient {
+  const t = {
+    async request() { return {} },
+    async *stream() {},
+  } as unknown as FabriqTransport
+  return new FabriqClient({ baseUrl: "http://test", transport: t })
+}
+
+const urlPlugins = [
+  definePlugin({
+    id: "p.home", name: "Home", version: "0", capabilities: [],
+    navItems: [{ label: "Home", to: "", order: 0 }],
+    routes: [{ path: "", element: () => <div>HOME PAGE</div>, title: "Home" }],
+  }),
+  definePlugin({
+    id: "p.search", name: "Search", version: "0", capabilities: [],
+    navItems: [{ label: "Search", to: "search", order: 1 }],
+    routes: [{ path: "search", element: () => <div>SEARCH PAGE</div>, title: "Search" }],
+  }),
+]
+
+describe("FabriqAdmin routing=path", () => {
+  beforeEach(() => window.history.replaceState(null, "", "/"))
+
+  it("deep-links from the URL on mount", () => {
+    window.history.replaceState(null, "", "/admin/search")
+    render(<FabriqAdmin client={urlTestClient()} plugins={urlPlugins} routing="path" path="/admin" />)
+    expect(screen.getByText("SEARCH PAGE")).toBeTruthy()
+  })
+
+  it("responds to popstate (back/forward)", () => {
+    window.history.replaceState(null, "", "/admin")
+    render(<FabriqAdmin client={urlTestClient()} plugins={urlPlugins} routing="path" path="/admin" />)
+    expect(screen.getByText("HOME PAGE")).toBeTruthy()
+    act(() => {
+      window.history.replaceState(null, "", "/admin/search")
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
+    expect(screen.getByText("SEARCH PAGE")).toBeTruthy()
+  })
+
+  it("invokes routerPush on in-console navigation", () => {
+    window.history.replaceState(null, "", "/admin")
+    const routerPush = vi.fn()
+    render(
+      <FabriqAdmin client={urlTestClient()} plugins={urlPlugins} routing="path" path="/admin" routerPush={routerPush} />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: /^Search$/ }))
+    expect(routerPush).toHaveBeenCalledWith("/admin/search", expect.anything())
   })
 })

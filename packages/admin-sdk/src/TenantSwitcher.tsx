@@ -1,12 +1,27 @@
-import React, { useRef, useState, type KeyboardEvent } from "react"
+import React, { useState } from "react"
 import {
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
   Button,
   Input,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
+  useSidebar,
 } from "@fabriq/ui"
-import { Building2, Check, Plus, ChevronDown, X } from "lucide-react"
+import { Building2, Check, ChevronsUpDown } from "lucide-react"
 import type { TenantStore } from "./tenant"
 import { useTenant } from "./tenant"
 
@@ -19,45 +34,30 @@ export interface TenantSwitcherProps {
 }
 
 /**
- * A sidebar-width popover that lets the user pick or add a tenant.
- * Sits in the SidebarHeader beneath the brand row.
+ * Sidebar team-switcher style dropdown for selecting/adding a tenant.
  *
- * Uses a Popover (not a Menu) so that focusable children like <Input> and
- * <Button> are allowed inside the popup. Base UI's Menu is a composite
- * roving-focus container that throws ("Base UI error #31") when arbitrary
- * focusable elements are nested inside it.
- *
- * - Shows recent tenants as selectable buttons (active one has a check mark).
- * - An inline "Add" row lets the user type a tenant id and press Enter or click +.
- * - A "Clear tenant" button appears when one is active.
+ * Uses a DropdownMenu (Base UI Menu) for the picker, but opens an external
+ * Dialog (modal) to collect the new tenant id. This is required because
+ * Base UI Menu is a roving-focus composite and throws "Base UI error #31"
+ * if an arbitrary focusable element like <input> is nested inside it.
+ * Moving input capture into a Dialog sidesteps this entirely.
  */
 export function TenantSwitcher({ store }: TenantSwitcherProps) {
   const { tenant, setTenant, recents } = useTenant(store)
-  const [open, setOpen] = useState(false)
+  const { isMobile } = useSidebar()
+  const [addOpen, setAddOpen] = useState(false)
   const [draft, setDraft] = useState("")
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  function selectTenant(id: string) {
-    setTenant(id)
-    setOpen(false)
-    setDraft("")
-  }
-
-  function clearTenant() {
-    setTenant(null)
-    setOpen(false)
-  }
 
   function commitDraft() {
     const val = draft.trim()
     if (val) {
       setTenant(val)
       setDraft("")
-      setOpen(false)
+      setAddOpen(false)
     }
   }
 
-  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault()
       commitDraft()
@@ -65,96 +65,132 @@ export function TenantSwitcher({ store }: TenantSwitcherProps) {
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      {/* PopoverTrigger from @base-ui/react already renders a <button>;
-          do not wrap with <Button> to avoid nested <button> elements. */}
-      <PopoverTrigger
-        className="inline-flex w-full items-center justify-between gap-2 rounded-md px-2 h-8 text-xs font-normal text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        aria-label={tenant ? `Active tenant: ${tenant}` : "No tenant selected"}
-      >
-        <span className="flex items-center gap-1.5 truncate">
-          <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="truncate">{tenant ?? "No tenant"}</span>
-        </span>
-        <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </PopoverTrigger>
-
-      <PopoverContent
-        align="start"
-        sideOffset={4}
-        className="w-56 p-1"
-      >
-        {/* Label */}
-        <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
-          Tenants
-        </p>
-
-        {/* Recent tenants list */}
-        {recents.length === 0 ? (
-          <p className="px-2 py-1 text-xs text-muted-foreground italic">
-            No recent tenants
-          </p>
-        ) : (
-          <div role="listbox" aria-label="Recent tenants">
-            {recents.map((r) => (
-              <button
-                key={r}
-                role="option"
-                aria-selected={tenant === r}
-                className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-xs text-left hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground outline-none"
-                onClick={() => selectTenant(r)}
-              >
-                <Check
-                  className="h-3.5 w-3.5 shrink-0"
-                  style={{ opacity: tenant === r ? 1 : 0 }}
-                  aria-hidden="true"
-                />
-                <span className="truncate">{r}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Separator */}
-        <div className="-mx-1 my-1 h-px bg-border" role="separator" />
-
-        {/* Inline "Add tenant" row — Popover allows arbitrary focusable children */}
-        <div className="flex items-center gap-1 px-1.5 py-1">
-          <Input
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Add tenant id…"
-            className="h-6 text-xs px-2 flex-1 min-w-0"
-            aria-label="New tenant id"
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 shrink-0"
-            onClick={commitDraft}
-            disabled={!draft.trim()}
-            aria-label="Add tenant"
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <SidebarMenuButton
+                size="lg"
+                aria-label={tenant ? `Active tenant: ${tenant}` : "No tenant selected"}
+                className="data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground"
+              />
+            }
           >
-            <Plus className="h-3 w-3" aria-hidden="true" />
-          </Button>
-        </div>
+            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <Building2 className="size-4" aria-hidden="true" />
+            </div>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-semibold">{tenant ?? "No tenant"}</span>
+              <span className="truncate text-xs">Tenant</span>
+            </div>
+            <ChevronsUpDown className="ml-auto" aria-hidden="true" />
+          </DropdownMenuTrigger>
 
-        {/* Clear tenant (shown only when a tenant is active) */}
-        {tenant && (
-          <>
-            <div className="-mx-1 my-1 h-px bg-border" role="separator" />
-            <button
-              className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-xs text-destructive text-left hover:bg-destructive/10 focus:bg-destructive/10 outline-none"
-              onClick={clearTenant}
+          <DropdownMenuContent
+            className="min-w-56 rounded-lg"
+            align="start"
+            side={isMobile ? "bottom" : "right"}
+            sideOffset={4}
+          >
+            {/* DropdownMenuLabel uses Menu.GroupLabel which requires a Menu.Group parent */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Tenants
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
+
+            {recents.length === 0 ? (
+              // Plain div — not a menu item — because a disabled DropdownMenuItem
+              // still participates in roving-focus and can be confusing to screen
+              // readers. A static text node communicates the empty state clearly.
+              <div className="px-2 py-1 text-xs text-muted-foreground italic">
+                No recent tenants
+              </div>
+            ) : (
+              recents.map((r, index) => (
+                <DropdownMenuItem
+                  key={r}
+                  onClick={() => setTenant(r)}
+                  className="gap-2 p-2"
+                >
+                  <div className="flex size-6 items-center justify-center rounded-sm border bg-background">
+                    <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
+                  </div>
+                  <span className="truncate flex-1">{r}</span>
+                  {tenant === r && (
+                    <Check className="size-3.5 shrink-0" aria-hidden="true" />
+                  )}
+                  {index < 9 && (
+                    <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
+                  )}
+                </DropdownMenuItem>
+              ))
+            )}
+
+            <DropdownMenuSeparator />
+
+            {/* "Add tenant" opens a Dialog instead of embedding an <input> here.
+                Base UI Menu throws "Base UI error #31" when arbitrary focusable
+                elements (e.g. <input>) are nested inside a Menu composite. */}
+            <DropdownMenuItem
+              onClick={() => {
+                setDraft("")
+                setAddOpen(true)
+              }}
+              className="gap-2 p-2"
             >
-              <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span>Clear tenant</span>
-            </button>
-          </>
-        )}
-      </PopoverContent>
-    </Popover>
+              Add tenant
+            </DropdownMenuItem>
+
+            {tenant && (
+              <DropdownMenuItem
+                onClick={() => setTenant(null)}
+                variant="destructive"
+                className="gap-2 p-2"
+              >
+                Clear tenant
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Dialog lives as a sibling to DropdownMenu so it is outside the
+            Menu composite. Controlled by addOpen, not by a DialogTrigger. */}
+        <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add tenant</DialogTitle>
+              <DialogDescription>
+                Enter a tenant id to switch to. It will be saved to your recent
+                tenants list.
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              autoFocus
+              aria-label="New tenant id"
+              placeholder="tenant id…"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKeyDown}
+            />
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setAddOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={commitDraft}
+                disabled={!draft.trim()}
+              >
+                Add
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </SidebarMenuItem>
+    </SidebarMenu>
   )
 }

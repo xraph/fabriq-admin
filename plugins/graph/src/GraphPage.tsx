@@ -3,6 +3,7 @@ import {
   useFabriqClient,
   usePluginHost,
   HttpTransportError,
+  EntityTypeCombobox,
   type GraphData,
   type GraphNode,
   type GraphQueryResult,
@@ -167,12 +168,10 @@ export function GraphPage() {
               <label htmlFor="graph-type" className="text-sm font-medium">
                 Entity type
               </label>
-              <Input
+              <EntityTypeCombobox
                 id="graph-type"
-                aria-label="Entity type"
                 value={type}
-                onChange={(e) => setType(e.target.value)}
-                placeholder="product"
+                onChange={setType}
                 className="font-mono"
               />
             </div>
@@ -209,7 +208,7 @@ export function GraphPage() {
               type="button"
               onClick={handleExplore}
               disabled={exploring}
-              className="gap-2"
+              className="gap-2 self-end"
             >
               <Share2 className="h-4 w-4" aria-hidden="true" />
               {exploring ? "Exploring…" : "Explore"}

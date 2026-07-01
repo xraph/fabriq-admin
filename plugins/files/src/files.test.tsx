@@ -139,8 +139,8 @@ describe("FilesPage — descend", () => {
     )
     expect(calledWithFold1).toBe(true)
 
-    // breadcrumb now contains the folder name
-    const crumbs = screen.getByRole("navigation", { name: /breadcrumb/i })
+    // folder-path breadcrumb now contains the folder name
+    const crumbs = screen.getByRole("navigation", { name: /folder path/i })
     expect(within(crumbs).getByText("Documents")).toBeTruthy()
     expect(within(crumbs).getByText(/root/i)).toBeTruthy()
   })

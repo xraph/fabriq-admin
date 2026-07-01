@@ -260,8 +260,9 @@ export function FilesPage() {
         )}
       </div>
 
-      {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-sm">
+      {/* Folder-path breadcrumb — distinct landmark label so it doesn't collide
+          with the app shell's primary "breadcrumb" navigation. */}
+      <nav aria-label="Folder path" className="flex flex-wrap items-center gap-1 text-sm">
         <button
           type="button"
           className="rounded px-1.5 py-0.5 font-medium hover:bg-muted"

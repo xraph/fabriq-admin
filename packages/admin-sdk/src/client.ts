@@ -108,10 +108,93 @@ export interface VectorMatch {
   data?: Record<string, unknown>
 }
 
+/** Inspection of one stored embedding: dimensionality, L2 norm, and a preview. */
+export interface VectorEmbeddingInfo {
+  entity: string
+  id: string
+  dims: number
+  norm: number
+  /** Leading components of the embedding (the backend truncates the vector). */
+  preview: number[]
+}
+
+/** A raw command verb against the write plane. */
+export type CommandOp = "create" | "update" | "delete" | "upsert"
+
+/** One raw command against the write plane (mirrors the backend command.Command). */
+export interface CommandInput {
+  entity: string
+  op: CommandOp
+  /** Required for update/delete/upsert; a ULID is minted for create when omitted. */
+  aggId?: string
+  /** Column-keyed body (create/update/upsert); ignored for delete. */
+  payload?: Record<string, unknown>
+  /** Optimistic-concurrency guard — a mismatch is a 409. */
+  expectedVersion?: number
+}
+
+/** The outcome of one command. */
+export interface CommandResult {
+  aggId: string
+  version: number
+  eventId: string
+}
+
+/** The agent write allowlist (deny-by-default): entity name → permitted ops. */
+export interface AgentWritePolicy {
+  allow: Record<string, string[]>
+}
+
 export interface WatchScope {
   tenant?: string
   type?: string
 }
+
+// ---------------------------------------------------------------------------
+// Live query (live tail) types
+// ---------------------------------------------------------------------------
+
+/**
+ * First event of a live subscription — the initial set of rows that match the
+ * subscription's filter at subscribe time.
+ */
+export interface LiveSnapshotEvent {
+  type: "snapshot"
+  /** Initial matching rows. Each is `{ id, row }` (the row payload nested under `row`). */
+  rows: Array<{ id: string; row?: Record<string, unknown> } & Record<string, unknown>>
+}
+
+/**
+ * A single change event in a maintained-window live subscription.
+ * `op` follows fabriq's livequery vocabulary:
+ *   enter  — row newly matches / entered the window
+ *   leave  — row left the window (deleted or no longer matches)
+ *   move   — row reordered within the window
+ *   update — in-window row's payload changed
+ *   reset  — the window was reset (re-snapshot)
+ * `row` carries the row payload (absent for `leave`); `oldIndex`/`newIndex`
+ * are the row's window positions (-1 when not present).
+ */
+export type LiveDeltaOp = "enter" | "leave" | "move" | "update" | "reset"
+
+export interface LiveDeltaEvent {
+  type: "delta"
+  op: LiveDeltaOp
+  id: string
+  row?: Record<string, unknown>
+  oldIndex?: number
+  newIndex?: number
+}
+
+/**
+ * Any event yielded by a live subscription. Known shapes are the snapshot and
+ * delta events; unknown event types (e.g. heartbeats) are tolerated via the
+ * open-ended fallback so consumers can ignore them gracefully.
+ */
+export type LiveEvent =
+  | LiveSnapshotEvent
+  | LiveDeltaEvent
+  | { type: string;[k: string]: unknown }
 
 /**
  * Field kind reported by the backend schema endpoint. The wire format may carry
@@ -213,6 +296,178 @@ export interface SpatialResult {
 }
 
 // ---------------------------------------------------------------------------
+// Timeseries (telemetry) types
+// ---------------------------------------------------------------------------
+
+/** The distinct series keys available for a telemetry series (table). */
+export interface TimeseriesKeys {
+  series: string
+  keys: string[]
+}
+
+/** Bucket aggregation for a downsampled range read. */
+export type TimeseriesAgg = "avg" | "min" | "max" | "last"
+
+/** A single telemetry sample: timestamp, value, and OPC-style quality band. */
+export interface TimeseriesPoint {
+  at: string
+  value: number
+  quality: number
+}
+
+/** Request for a telemetry range read over the half-open window [from, to). */
+export interface TimeseriesRangeRequest {
+  /** Series (table) name. Defaults server-side to `tag_readings` when omitted. */
+  series?: string
+  /** Series key (tag id) to read. Required. */
+  key: string
+  /** RFC3339 window bounds. Omitted `to` = now; omitted `from` = now − 24h. */
+  from?: string
+  to?: string
+  /** When > 0, downsample into fixed-width buckets aggregated by `agg`. */
+  bucketSeconds?: number
+  /** Bucket aggregation (default avg). Ignored when `bucketSeconds` is unset. */
+  agg?: TimeseriesAgg
+}
+
+/** Result of a telemetry range read — points in ascending time order. */
+export interface TimeseriesRangeResult {
+  series: string
+  key: string
+  from: string
+  to: string
+  /** True when the points were downsampled into `agg` buckets. */
+  bucketed: boolean
+  agg?: TimeseriesAgg
+  points: TimeseriesPoint[]
+}
+
+// ---------------------------------------------------------------------------
+// Events (outbox event-log) types
+// ---------------------------------------------------------------------------
+
+/**
+ * One row of the transactional outbox — the durable event log behind the
+ * command plane. Every aggregate write appends one envelope; the relay stamps
+ * `published` when it forwards the event to the change feed but never deletes
+ * the row, so the outbox is an append-only history.
+ */
+export interface OutboxEvent {
+  id: string
+  aggregate: string
+  aggId: string
+  version: number
+  type: string
+  at: string
+  payloadSchemaVersion: number
+  published: boolean
+  streamId?: string
+  /** The column-keyed aggregate state after the change ({} for deletes). */
+  payload: unknown
+}
+
+/** Filters + paging for an outbox event query. */
+export interface EventsQuery {
+  aggregate?: string
+  type?: string
+  aggId?: string
+  published?: boolean
+  limit?: number
+  cursor?: string
+}
+
+/** A page of outbox events, recent-first. */
+export interface EventsPage {
+  items: OutboxEvent[]
+  nextCursor: string
+}
+
+/** Unpublished outbox depth (relay backlog). */
+export interface EventsBacklog {
+  unpublished: number
+}
+
+// ---------------------------------------------------------------------------
+// Projections types
+// ---------------------------------------------------------------------------
+
+/** Bookkeeping for one projection plane (graph/search): its blue-green pointer. */
+export interface ProjectionStatus {
+  name: string
+  /** live | building | soaking | abandoned */
+  status: string
+  modelVersion: number
+  /** Last applied event ULID (stream position); empty when nothing applied. */
+  eventVersion: string
+  /** Engine target currently receiving applies; empty for the default live target. */
+  targetName: string
+}
+
+/** Projection bookkeeping + outbox backlog (lag proxy). */
+export interface ProjectionsInfo {
+  projections: ProjectionStatus[]
+  backlog: number
+}
+
+/** One aggregate whose projected version differs from the source of truth. */
+export interface ProjectionDrift {
+  entity: string
+  aggId: string
+  truthVersion: number
+  projectedVersion: number
+}
+
+/** Result of a projection reconcile scan. */
+export interface ReconcileResult {
+  projection: string
+  repaired: boolean
+  driftCount: number
+  drifts: ProjectionDrift[]
+}
+
+/** Result of a projection rebuild (blue-green target swap). */
+export interface RebuildResult {
+  projection: string
+  oldTarget: string
+  newTarget: string
+}
+
+// ---------------------------------------------------------------------------
+// Cache types
+// ---------------------------------------------------------------------------
+
+/** One entity's read-through cache keyspace, derived from its CacheSpec. */
+export interface CacheKeyspace {
+  entity: string
+  name: string
+  /** "tenant" | "tenant+scope" */
+  partition: string
+  /** invalidation mode, e.g. "versioned" */
+  mode: string
+  ttlSeconds: number
+  scoped: boolean
+}
+
+/** Cache status + the entities that opt into the read-through row cache. */
+export interface CacheInfo {
+  /** True when an engine cache is wired (Redis present). */
+  configured: boolean
+  keyspaces: CacheKeyspace[]
+}
+
+/** Cache activity counters + derived hit-rate. */
+export interface CacheStats {
+  /** False when the cache is configured but exposes no counters. */
+  available: boolean
+  hits: number
+  misses: number
+  sets: number
+  invalidations: number
+  /** Hits / (Hits + Misses), 0 when there have been no lookups. */
+  hitRate: number
+}
+
+// ---------------------------------------------------------------------------
 // Graph types
 // ---------------------------------------------------------------------------
 
@@ -271,6 +526,99 @@ export interface CrdtUpdate {
 export interface CrdtUpdates {
   items: CrdtUpdate[]
   highWaterSeq: number
+}
+
+// ---------------------------------------------------------------------------
+// Distillation (DigestNode Merkle tree) types
+// ---------------------------------------------------------------------------
+
+/**
+ * A single node in the per-tenant distillation Merkle tree (the "AI data
+ * fabric"). Levels: L2 = tenant root, L1 = scope nodes, L0 = leaf (per-entity)
+ * digests. `childCount`, the hashes, and `summary` may be absent depending on
+ * the endpoint that produced the node.
+ */
+export interface DigestNode {
+  id: string
+  level: number
+  scopeId?: string
+  childCount?: number
+  contentHash?: string
+  semHash?: string
+  summary?: string
+  parentIds?: string[]
+}
+
+/**
+ * The whole digest tree as a flat node list plus the id of the tenant root.
+ * `nodes` may be empty when nothing has been distilled yet for the tenant.
+ */
+export interface DigestMap {
+  rootId: string
+  nodes: DigestNode[]
+}
+
+/** A child reference returned when drilling into a single digest node. */
+export interface DigestChild {
+  id: string
+  kind?: string
+  summary?: string
+  contentHash?: string
+  semHash?: string
+}
+
+/** A single digest node plus its summary and immediate children. */
+export interface DigestView {
+  node: DigestNode
+  summary?: string
+  children: DigestChild[]
+}
+
+// ---------------------------------------------------------------------------
+// Recall (agent-toolkit hybrid recall) types
+// ---------------------------------------------------------------------------
+
+/**
+ * A single item in a hybrid-recall pack. `source` lists every channel that
+ * contributed to this item surfacing — "vector" (semantic), "search"
+ * (full-text), and/or "graph" (graph-expanded) — making the RRF fusion visible
+ * ("WHY did this surface?"). `score` is the fused RRF score (higher = better),
+ * `row` is the hydrated entity object, and `tokens` is the item's token cost.
+ */
+export interface RecallItem {
+  entity: string
+  id: string
+  row?: Record<string, unknown>
+  score: number
+  source: string[]
+  tokens?: number
+}
+
+/**
+ * The result of a hybrid recall: a fused, ranked list of items plus budget
+ * accounting. `omitted` is how many candidates were dropped to fit `budget`,
+ * `tokens` is the total token cost of the returned items, and `warnings`
+ * carries any non-fatal notes from the backend (e.g. a channel being skipped).
+ */
+export interface RecallPack {
+  items: RecallItem[]
+  omitted?: number
+  tokens?: number
+  warnings?: string[]
+}
+
+/**
+ * A hybrid-recall request. `query` is required; `entities` scopes the recall to
+ * specific entity types; `budget` caps the total token cost of the returned
+ * pack; `k` bounds the per-channel candidate count; `hops` bounds graph
+ * expansion depth.
+ */
+export interface RecallRequest {
+  query: string
+  entities?: string[]
+  budget?: number
+  k?: number
+  hops?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -465,6 +813,76 @@ export class FabriqClient {
     })
   }
 
+  // -------------------------------------------------------------------------
+  // Vector embedding management
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /vector/:entity/:id — inspect a stored embedding (dims, L2 norm, and a
+   * leading preview). Throws an HttpTransportError with `.status` 404 when no
+   * embedding is stored, or 501 when vector is unconfigured.
+   */
+  vectorGet(entity: string, id: string): Promise<VectorEmbeddingInfo> {
+    return this.transport.request<VectorEmbeddingInfo>({
+      method: "GET",
+      path: `${this.baseUrl}/vector/${encodeURIComponent(entity)}/${encodeURIComponent(id)}`,
+    })
+  }
+
+  /** DELETE /vector/:entity/:id — remove one stored embedding (idempotent). */
+  vectorDelete(entity: string, id: string): Promise<{ deleted: boolean }> {
+    return this.transport.request<{ deleted: boolean }>({
+      method: "DELETE",
+      path: `${this.baseUrl}/vector/${encodeURIComponent(entity)}/${encodeURIComponent(id)}`,
+    })
+  }
+
+  /**
+   * POST /vector/delete-by-meta — remove every embedding for `entity` whose meta
+   * matches `filter` (AND-of-equals). An empty filter is the wipe-all path and is
+   * rejected by the backend unless `all: true` is set explicitly.
+   */
+  vectorDeleteByMeta(body: {
+    entity: string
+    filter?: Record<string, string>
+    all?: boolean
+  }): Promise<{ deleted: boolean }> {
+    return this.transport.request<{ deleted: boolean }>({
+      method: "POST",
+      path: `${this.baseUrl}/vector/delete-by-meta`,
+      body,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Raw commands (write plane)
+  // -------------------------------------------------------------------------
+
+  /**
+   * POST /commands — run one command through the write plane. Throws an
+   * HttpTransportError with `.status` 400 (malformed), 404 (missing aggregate),
+   * or 409 (version conflict).
+   */
+  execCommand(cmd: CommandInput): Promise<{ result: CommandResult }> {
+    return this.transport.request<{ result: CommandResult }>({
+      method: "POST",
+      path: `${this.baseUrl}/commands`,
+      body: cmd,
+    })
+  }
+
+  /**
+   * POST /commands/batch — run N commands ordered and all-or-nothing in one
+   * transaction. Any command's failure rolls the whole batch back.
+   */
+  execBatch(commands: CommandInput[]): Promise<{ results: CommandResult[] }> {
+    return this.transport.request<{ results: CommandResult[] }>({
+      method: "POST",
+      path: `${this.baseUrl}/commands/batch`,
+      body: { commands },
+    })
+  }
+
   /**
    * GET /graph/neighbors?type=&id=&limit= — direct neighbors of a node.
    *
@@ -547,6 +965,205 @@ export class FabriqClient {
       method: "POST",
       path: `${this.baseUrl}/spatial/within`,
       body,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Timeseries (telemetry)
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /timeseries/keys — list the distinct series keys (tag ids) present for
+   * the active tenant in `series` (default `tag_readings`).
+   *
+   * A backend without a timeseries port configured surfaces as a 501, thrown as
+   * an HttpTransportError so callers can inspect `.status`. The tenant is
+   * attached by the transport (X-Tenant-ID).
+   */
+  timeseriesKeys(series?: string): Promise<TimeseriesKeys> {
+    const q = series ? `?series=${encodeURIComponent(series)}` : ""
+    return this.transport.request<TimeseriesKeys>({
+      method: "GET",
+      path: `${this.baseUrl}/timeseries/keys${q}`,
+    })
+  }
+
+  /**
+   * POST /timeseries/range — read a telemetry window for one series key,
+   * optionally downsampled into fixed-width buckets.
+   *
+   * Body `{series?, key, from?, to?, bucketSeconds?, agg?}` → `{series, key,
+   * from, to, bucketed, agg?, points}`. Points come back in ascending time
+   * order. A missing key surfaces as 400; an unconfigured backend as 501 — both
+   * thrown as an HttpTransportError.
+   */
+  timeseriesRange(req: TimeseriesRangeRequest): Promise<TimeseriesRangeResult> {
+    return this.transport.request<TimeseriesRangeResult>({
+      method: "POST",
+      path: `${this.baseUrl}/timeseries/range`,
+      body: req,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Events (outbox event log)
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /events — page the transactional outbox (durable event log), recent-first.
+   *
+   * Optional filters `{aggregate, type, aggId, published}` and keyset paging via
+   * `cursor` (pass the previous page's `nextCursor`). The tenant is attached by
+   * the transport (X-Tenant-ID).
+   */
+  listEvents(q: EventsQuery = {}): Promise<EventsPage> {
+    const params = new URLSearchParams()
+    if (q.aggregate) params.set("aggregate", q.aggregate)
+    if (q.type) params.set("type", q.type)
+    if (q.aggId) params.set("aggId", q.aggId)
+    if (q.published !== undefined) params.set("published", String(q.published))
+    if (q.limit) params.set("limit", String(q.limit))
+    if (q.cursor) params.set("cursor", q.cursor)
+    const qs = params.toString()
+    return this.transport.request<EventsPage>({
+      method: "GET",
+      path: `${this.baseUrl}/events${qs ? `?${qs}` : ""}`,
+    })
+  }
+
+  /** GET /events/backlog — the unpublished outbox depth for the active tenant. */
+  eventsBacklog(): Promise<EventsBacklog> {
+    return this.transport.request<EventsBacklog>({
+      method: "GET",
+      path: `${this.baseUrl}/events/backlog`,
+    })
+  }
+
+  /**
+   * GET /projections — the graph/search projection bookkeeping for the active
+   * tenant plus the outbox backlog (lag proxy). A backend without Postgres
+   * bookkeeping surfaces as a 501 (thrown HttpTransportError).
+   */
+  projections(): Promise<ProjectionsInfo> {
+    return this.transport.request<ProjectionsInfo>({
+      method: "GET",
+      path: `${this.baseUrl}/projections`,
+    })
+  }
+
+  /**
+   * GET /cache — whether an engine cache is wired and which entities opt into
+   * the read-through row cache.
+   */
+  cacheInfo(): Promise<CacheInfo> {
+    return this.transport.request<CacheInfo>({
+      method: "GET",
+      path: `${this.baseUrl}/cache`,
+    })
+  }
+
+  /**
+   * POST /cache/invalidate — bump an entity's cache generation, orphaning every
+   * cached read of it for the tenant. 501 when no cache is configured, 400 when
+   * the entity is unknown or not cached.
+   */
+  cacheInvalidate(entity: string): Promise<{ invalidated: boolean }> {
+    return this.transport.request<{ invalidated: boolean }>({
+      method: "POST",
+      path: `${this.baseUrl}/cache/invalidate`,
+      body: { entity },
+    })
+  }
+
+  /** GET /cache/stats — cache activity counters (hit-rate). 501 when no cache. */
+  cacheStats(): Promise<CacheStats> {
+    return this.transport.request<CacheStats>({
+      method: "GET",
+      path: `${this.baseUrl}/cache/stats`,
+    })
+  }
+
+  /**
+   * POST /projections/reconcile — scan a projection ("graph"|"search") against
+   * the source of truth for drift, optionally repairing it (repair=true).
+   */
+  projectionReconcile(projection: string, repair = false): Promise<ReconcileResult> {
+    return this.transport.request<ReconcileResult>({
+      method: "POST",
+      path: `${this.baseUrl}/projections/reconcile`,
+      body: { projection, repair },
+    })
+  }
+
+  /**
+   * POST /projections/rebuild — rebuild a projection from the source of truth
+   * into a fresh target, then swap. A heavy worker-plane operation.
+   */
+  projectionRebuild(projection: string): Promise<RebuildResult> {
+    return this.transport.request<RebuildResult>({
+      method: "POST",
+      path: `${this.baseUrl}/projections/rebuild`,
+      body: { projection },
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Recall (agent-toolkit hybrid recall)
+  // -------------------------------------------------------------------------
+
+  /**
+   * POST /recall — run the agent toolkit's hybrid recall: RRF fusion of the
+   * vector, full-text search, and graph channels into one fused, ranked context
+   * pack.
+   *
+   * Body `{query, entities?, budget?, k?, hops?}` → `{items, omitted?, tokens?,
+   * warnings?}`. Items are returned best-first (highest fused RRF score), each
+   * carrying the channels that contributed (`source`) and the hydrated row.
+   *
+   * A missing query surfaces as a 400; a backend without the recall facade
+   * configured surfaces as a 501 — both thrown as an HttpTransportError so
+   * callers can inspect `.status`. The tenant is attached by the transport
+   * (X-Tenant-ID), not the body.
+   */
+  recall(req: RecallRequest): Promise<RecallPack> {
+    return this.transport.request<RecallPack>({
+      method: "POST",
+      path: `${this.baseUrl}/recall`,
+      body: req,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Agent guarded writes (Remember)
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /agent/write-policy — the deny-by-default write allowlist: a map of
+   * entity name → permitted ops. An empty map means every write is denied.
+   */
+  agentWritePolicy(): Promise<AgentWritePolicy> {
+    return this.transport.request<AgentWritePolicy>({
+      method: "GET",
+      path: `${this.baseUrl}/agent/write-policy`,
+    })
+  }
+
+  /**
+   * POST /agent/remember — a policy-gated write through the agent toolkit. A
+   * denied entity/op surfaces as an HttpTransportError with `.status` 403; other
+   * failures map to 400 (validation), 404 (missing), or 409 (version conflict).
+   */
+  agentRemember(req: {
+    entity: string
+    op: CommandOp
+    aggId?: string
+    payload?: Record<string, unknown>
+    expectedVersion?: number
+  }): Promise<{ result: CommandResult }> {
+    return this.transport.request<{ result: CommandResult }>({
+      method: "POST",
+      path: `${this.baseUrl}/agent/remember`,
+      body: req,
     })
   }
 
@@ -665,6 +1282,43 @@ export class FabriqClient {
     })
   }
 
+  // -------------------------------------------------------------------------
+  // Distillation (DigestNode Merkle tree) plane
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /distill/map — the whole per-tenant digest Merkle tree as a flat node
+   * list plus the tenant root id. `nodes` may be empty when nothing has been
+   * distilled yet for the tenant. An unconfigured distillation plane surfaces
+   * as a thrown HttpTransportError with status 501.
+   */
+  distillMap(): Promise<DigestMap> {
+    return this.transport.request<DigestMap>({
+      method: "GET",
+      path: `${this.baseUrl}/distill/map`,
+    })
+  }
+
+  /**
+   * GET /distill/node/:id — a single digest node, its summary, and its
+   * immediate children (used for lazy drill-down).
+   *
+   * The `id` looks like `digest:2:tenant` (contains colons, no slashes); it is
+   * percent-encoded as a single path segment. 404 if the node is absent; 501 if
+   * the distillation plane is not configured — both surface as a thrown
+   * HttpTransportError with the relevant `.status`.
+   */
+  distillNode(id: string): Promise<DigestView> {
+    // Digest ids are colon-delimited (e.g. "digest:2:tenant"); the backend route
+    // matches the RAW id, so encode each segment but KEEP the colons (encoding
+    // them to %3A would 404).
+    const encodedId = id.split(":").map(encodeURIComponent).join(":")
+    return this.transport.request<DigestView>({
+      method: "GET",
+      path: `${this.baseUrl}/distill/node/${encodedId}`,
+    })
+  }
+
   /** GET /plugins — list all registered remote plugins */
   listPlugins(): Promise<{ items: PluginRecord[] }> {
     return this.transport.request({
@@ -704,6 +1358,31 @@ export class FabriqClient {
       path: `${this.baseUrl}/watch`,
       body: scope,
     })
+  }
+
+  /**
+   * POST /live (Server-Sent Events) — subscribe to an entity and stream its
+   * changes in real time ("live tail").
+   *
+   * The returned async-iterable first yields a `{type:"snapshot",rows}` event
+   * with the initial matching rows, then a `{type:"delta",op,id,row?}` event for
+   * each subsequent insert/update/delete. Periodic heartbeats (or other unknown
+   * event types) may be interleaved and should be ignored gracefully.
+   *
+   * Pass an `AbortSignal` to close the stream (Stop / unmount). The tenant is
+   * attached by the transport (X-Tenant-ID) — it is NOT part of the body. A
+   * backend without live queries configured surfaces a 501 as a thrown
+   * HttpTransportError.
+   */
+  liveSubscribe(
+    body: { entity: string; filter?: unknown; limit?: number },
+    signal?: AbortSignal,
+  ): AsyncIterable<LiveEvent> {
+    return this.transport.stream({
+      path: `${this.baseUrl}/live`,
+      body,
+      signal,
+    }) as AsyncIterable<LiveEvent>
   }
 }
 
