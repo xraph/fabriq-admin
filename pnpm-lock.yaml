@@ -68,6 +68,9 @@ importers:
       '@fabriq/plugin-projections':
         specifier: workspace:*
         version: link:../../plugins/projections
+      '@fabriq/plugin-query':
+        specifier: workspace:*
+        version: link:../../plugins/query
       '@fabriq/plugin-recall':
         specifier: workspace:*
         version: link:../../plugins/recall
@@ -558,6 +561,31 @@ importers:
       '@fabriq/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      lucide-react:
+        specifier: ^0.456.0
+        version: 0.456.0(react@19.2.7)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.7(react@19.2.7)
+
+  plugins/query:
+    dependencies:
+      '@fabriq/admin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/admin-sdk
+      '@fabriq/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@tanstack/react-table':
+        specifier: 8.21.3
+        version: 8.21.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       lucide-react:
         specifier: ^0.456.0
         version: 0.456.0(react@19.2.7)

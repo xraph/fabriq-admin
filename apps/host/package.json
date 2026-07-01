@@ -24,6 +24,7 @@
     "@fabriq/plugin-overview": "workspace:*",
     "@fabriq/plugin-projections": "workspace:*",
     "@fabriq/plugin-plugins-manager": "workspace:*",
+    "@fabriq/plugin-query": "workspace:*",
     "@fabriq/plugin-recall": "workspace:*",
     "@fabriq/plugin-search": "workspace:*",
     "@fabriq/plugin-spatial": "workspace:*",
