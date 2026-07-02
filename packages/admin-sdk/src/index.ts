@@ -61,3 +61,6 @@ export { EntityTypeCombobox } from "./EntityTypeCombobox"
 export type { EntityTypeComboboxProps } from "./EntityTypeCombobox"
 export { ConfirmProvider, useConfirm } from "./confirm"
 export type { ConfirmOptions, ConfirmFn } from "./confirm"
+
+export { parseDsn, dsnBaseUrl } from "./dsn"
+export type { ParsedDsn } from "./dsn"
