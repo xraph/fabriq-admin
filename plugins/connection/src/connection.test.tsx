@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { FabriqClient, FabriqAdmin, HttpTransportError, type FabriqTransport } from "@fabriq/admin-sdk"
 import { connectionPlugin } from "./index"
 
@@ -82,5 +82,32 @@ describe("connection plugin", () => {
     await waitFor(() => expect(screen.getByText(/auth enabled/i)).toBeTruthy())
     // The info card still renders alongside the not-configured keys card.
     expect(screen.getByText("localhost:8080")).toBeTruthy()
+  })
+
+  it("issues a key and reveals the key + a fabriq:// DSN once", async () => {
+    const client = makeClient((o) => {
+      const p = o.path as string
+      if (p.endsWith("/keys") && o.method === "GET") return { keys: [] }
+      if (p.endsWith("/keys") && o.method === "POST") {
+        return { id: "k9", prefix: "fq_z9", key: "fq_z9SECRETVALUE" }
+      }
+      return {}
+    })
+    render(
+      <FabriqAdmin
+        client={client}
+        plugins={[connectionPlugin]}
+        loadRemote={vi.fn()}
+        initialPath="connection"
+      />,
+    )
+    await waitFor(() => expect(screen.getByRole("button", { name: /issue key/i })).toBeTruthy())
+    fireEvent.click(screen.getByRole("button", { name: /issue key/i }))
+    fireEvent.change(screen.getByLabelText(/label/i), { target: { value: "cli" } })
+    fireEvent.click(screen.getByRole("button", { name: /^create$/i }))
+    // Full key + assembled DSN revealed once (exact key string matches only the
+    // key <pre>; the DSN <pre> is matched by its own anchored pattern).
+    await waitFor(() => expect(screen.getByText("fq_z9SECRETVALUE")).toBeTruthy())
+    expect(screen.getByText(/^fabriq:\/\/fq_z9SECRETVALUE@localhost:8080/)).toBeTruthy()
   })
 })

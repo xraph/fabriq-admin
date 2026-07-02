@@ -4,6 +4,7 @@ import {
   useFabriqQuery,
   useQueryClient,
   HttpTransportError,
+  buildDsn,
   type ApiKey,
 } from "@fabriq/admin-sdk"
 import {
@@ -27,6 +28,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@fabriq/ui"
+import { connectionFromBaseUrl } from "./ConnectionInfoCard"
+import { IssueKeyDialog } from "./IssueKeyDialog"
 
 /** A 404/401 from GET /keys means the backend runs without auth (no key store). */
 function isUnavailable(err: unknown): boolean {
@@ -42,6 +45,8 @@ export function KeysCard({ tenant }: { tenant: string | null }) {
     retry: false,
   })
   const [revoking, setRevoking] = useState<string | null>(null)
+  const [issueOpen, setIssueOpen] = useState(false)
+  const [revealed, setRevealed] = useState<{ key: string; dsn: string } | null>(null)
 
   // Auth off / no key store — degrade gracefully (the info card still renders).
   if (error && isUnavailable(error)) {
@@ -78,16 +83,22 @@ export function KeysCard({ tenant }: { tenant: string | null }) {
     await client.revokeKey(id)
     await qc.invalidateQueries({ queryKey: ["api-keys"] })
   }
-  // tenant is accepted for parity with the issue flow (Task 6); unused here.
-  void tenant
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">
-          API keys <Badge variant="secondary">{keys.length}</Badge>
-        </CardTitle>
-        <CardDescription>Bearer keys for connecting SDKs/CLIs to this fabriq admin.</CardDescription>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-base">
+              API keys <Badge variant="secondary">{keys.length}</Badge>
+            </CardTitle>
+            <CardDescription>
+              Bearer keys for connecting SDKs/CLIs to this fabriq admin.
+            </CardDescription>
+          </div>
+          <Button size="sm" onClick={() => setIssueOpen(true)}>
+            Issue key
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -142,6 +153,38 @@ export function KeysCard({ tenant }: { tenant: string | null }) {
           </Table>
         )}
       </CardContent>
+
+      <IssueKeyDialog
+        open={issueOpen}
+        onOpenChange={setIssueOpen}
+        defaultTenant={tenant}
+        onIssued={(issued, t) => {
+          const c = connectionFromBaseUrl(client.baseUrl)
+          const dsn = buildDsn({
+            key: issued.key,
+            host: c.host,
+            port: c.port,
+            tls: c.tls,
+            tenant: t || undefined,
+            basePath: c.basePath,
+          })
+          setRevealed({ key: issued.key, dsn })
+          void qc.invalidateQueries({ queryKey: ["api-keys"] })
+        }}
+      />
+
+      {revealed && (
+        <div className="mx-6 mb-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+          <p className="font-medium">Copy your key now — it won&apos;t be shown again.</p>
+          <p className="mt-2 text-muted-foreground">Key</p>
+          <pre className="rounded bg-muted p-2 overflow-auto">{revealed.key}</pre>
+          <p className="mt-2 text-muted-foreground">Connection string (DSN)</p>
+          <pre className="rounded bg-muted p-2 overflow-auto">{revealed.dsn}</pre>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => setRevealed(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       <Dialog open={revoking !== null} onOpenChange={(o) => !o && setRevoking(null)}>
         <DialogContent showCloseButton={false}>
