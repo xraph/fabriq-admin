@@ -29,6 +29,7 @@ import { distillPlugin } from "@fabriq/plugin-distill"
 import { pluginsManagerPlugin } from "@fabriq/plugin-plugins-manager"
 import { apiConsolePlugin } from "@fabriq/plugin-api-console"
 import { commandsPlugin } from "@fabriq/plugin-commands"
+import { connectionPlugin } from "@fabriq/plugin-connection"
 import {
   __federation_method_setRemote,
   __federation_method_getRemote,
@@ -69,6 +70,7 @@ const plugins = [
   pluginsManagerPlugin,
   apiConsolePlugin,
   commandsPlugin,
+  connectionPlugin,
 ]
 
 /**

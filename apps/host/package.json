@@ -14,6 +14,7 @@
     "@fabriq/plugin-api-console": "workspace:*",
     "@fabriq/plugin-cache": "workspace:*",
     "@fabriq/plugin-commands": "workspace:*",
+    "@fabriq/plugin-connection": "workspace:*",
     "@fabriq/plugin-crdt": "workspace:*",
     "@fabriq/plugin-distill": "workspace:*",
     "@fabriq/plugin-entity-browser": "workspace:*",
