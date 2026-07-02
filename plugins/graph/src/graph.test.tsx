@@ -176,6 +176,68 @@ describe("GraphPage — cypher", () => {
     expect(screen.getByText("Gadget")).toBeTruthy()
   })
 
+  it("Cypher node/relationship results render as a graph with a Table toggle", async () => {
+    const node = (iid: number, id: string, label: string) => [
+      ["id", iid],
+      ["labels", [label]],
+      ["properties", [["id", id], ["name", id]]],
+    ]
+    const rel = (iid: number, s: number, d: number, t: string) => [
+      ["id", iid],
+      ["type", t],
+      ["src_node", s],
+      ["dest_node", d],
+      ["properties", []],
+    ]
+    const { client } = makeClient((opts) => {
+      if (opts.path.endsWith("/graph/query")) {
+        return {
+          columns: ["a", "r", "b"],
+          rows: [[node(3, "prod-1", "Product"), rel(9, 3, 0, "IN_CATEGORY"), node(0, "cat-1", "Category")]],
+        }
+      }
+      return {}
+    })
+    const { container } = render(
+      <FabriqAdmin client={client} plugins={[graphPlugin]} loadRemote={vi.fn()} initialPath="graph" />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: /advanced — cypher/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^run$/i }))
+
+    // The reconstructed graph renders (2 nodes / 1 edge) instead of raw JSON rows.
+    await waitFor(() => {
+      const svg = container.querySelector('[aria-label="Knowledge graph"]')
+      expect(svg).toBeTruthy()
+      expect(svg!.querySelectorAll("circle").length).toBe(2)
+    })
+    expect(screen.getByText("2 nodes")).toBeTruthy()
+    expect(screen.getByText("1 edges")).toBeTruthy()
+
+    // Switching to Table hides the graph and shows the tabular view.
+    fireEvent.click(screen.getByRole("button", { name: /^table$/i }))
+    await waitFor(() =>
+      expect(container.querySelector('[aria-label="Knowledge graph"]')).toBeNull(),
+    )
+  })
+
+  it("a preset button runs its query", async () => {
+    const { client, request } = makeClient((opts) => {
+      if (opts.path.endsWith("/graph/query")) return { columns: ["r"], rows: [] }
+      return {}
+    })
+    render(
+      <FabriqAdmin client={client} plugins={[graphPlugin]} loadRemote={vi.fn()} initialPath="graph" />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: /advanced — cypher/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^all relationships$/i }))
+
+    await waitFor(() =>
+      expect(request.mock.calls.some((c) => /\/graph\/query$/.test(c[0].path))).toBe(true),
+    )
+    const arg = request.mock.calls.find((c) => /\/graph\/query$/.test(c[0].path))![0]
+    expect(arg.body).toMatchObject({ cypher: "MATCH ()-[r]->() RETURN r LIMIT 50" })
+  })
+
   it("Cypher 400 (mutating) shows a read-only error", async () => {
     const { client } = makeClient(() => {
       throw new HttpTransportError(400, '{"error":"read-only"}')

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import {
   useFabriqClient,
   usePluginHost,
@@ -26,8 +26,9 @@ import {
   TableRow,
   TableCell,
 } from "@fabriq/ui"
-import { Share2, Play, ChevronDown, ChevronRight } from "lucide-react"
+import { Share2, Play, ChevronDown, ChevronRight, Table2 } from "lucide-react"
 import { ForceGraph, colorForGroup, groupOf } from "./ForceGraph"
+import { graphFromCypher, CYPHER_PRESETS } from "./cypherGraph"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -282,27 +283,40 @@ export function GraphPage() {
 
 function CypherBox({ client }: { client: ReturnType<typeof useFabriqClient> }) {
   const [open, setOpen] = useState(false)
-  const [cypher, setCypher] = useState(
-    "MATCH (n) RETURN n LIMIT 25",
-  )
+  const [cypher, setCypher] = useState("MATCH (n) RETURN n LIMIT 50")
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<GraphQueryResult | null>(null)
   const [error, setError] = useState<ErrState | null>(null)
+  const [view, setView] = useState<"graph" | "table">("graph")
 
-  async function handleRun() {
+  // Reconstruct a renderable graph from the returned nodes/relationships.
+  const graph = useMemo(() => (result ? graphFromCypher(result) : null), [result])
+  const hasGraph = !!graph && graph.nodes.length > 0
+  const legend = graph
+    ? [...new Map(graph.nodes.map((n) => [groupOf(n), groupOf(n)])).keys()]
+    : []
+
+  async function handleRun(override?: string) {
     setError(null)
-    const q = cypher.trim()
+    const q = (override ?? cypher).trim()
     if (!q) return
     setRunning(true)
     setResult(null)
     try {
       const res = await client.graphQuery({ cypher: q })
       setResult(res)
+      // Default to the graph view whenever the result contains nodes/edges.
+      setView(graphFromCypher(res).nodes.length > 0 ? "graph" : "table")
     } catch (err) {
       setError(toErrState(err))
     } finally {
       setRunning(false)
     }
+  }
+
+  function runPreset(preset: { label: string; cypher: string }) {
+    setCypher(preset.cypher)
+    void handleRun(preset.cypher)
   }
 
   return (
@@ -321,10 +335,26 @@ function CypherBox({ client }: { client: ReturnType<typeof useFabriqClient> }) {
           )}
           <CardTitle className="text-base">Advanced — Cypher</CardTitle>
         </button>
-        <CardDescription>Run a read-only Cypher query.</CardDescription>
+        <CardDescription>
+          Run a read-only Cypher query. Node/relationship results render as a graph.
+        </CardDescription>
       </CardHeader>
       {open && (
         <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-1.5" aria-label="Query presets">
+            {CYPHER_PRESETS.map((p) => (
+              <Button
+                key={p.label}
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={running}
+                onClick={() => runPreset(p)}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </div>
           <textarea
             aria-label="Cypher"
             value={cypher}
@@ -333,12 +363,7 @@ function CypherBox({ client }: { client: ReturnType<typeof useFabriqClient> }) {
             spellCheck={false}
             className="w-full rounded-md border border-input bg-transparent p-3 font-mono text-sm shadow-sm"
           />
-          <Button
-            type="button"
-            onClick={handleRun}
-            disabled={running}
-            className="gap-2"
-          >
+          <Button type="button" onClick={() => handleRun()} disabled={running} className="gap-2">
             <Play className="h-4 w-4" aria-hidden="true" />
             {running ? "Running…" : "Run"}
           </Button>
@@ -354,7 +379,64 @@ function CypherBox({ client }: { client: ReturnType<typeof useFabriqClient> }) {
             </Alert>
           )}
 
-          {result && <CypherResult result={result} />}
+          {result && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                {hasGraph && (
+                  <div className="flex gap-1" role="group" aria-label="Result view">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={view === "graph" ? "default" : "outline"}
+                      className="gap-1.5"
+                      onClick={() => setView("graph")}
+                    >
+                      <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      Graph
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={view === "table" ? "default" : "outline"}
+                      className="gap-1.5"
+                      onClick={() => setView("table")}
+                    >
+                      <Table2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      Table
+                    </Button>
+                  </div>
+                )}
+                {hasGraph && (
+                  <>
+                    <Badge variant="secondary">{graph!.nodes.length} nodes</Badge>
+                    <Badge variant="secondary">{graph!.edges.length} edges</Badge>
+                  </>
+                )}
+              </div>
+
+              {hasGraph && view === "graph" ? (
+                <div className="space-y-3">
+                  {legend.length > 0 && (
+                    <div className="flex flex-wrap gap-3" aria-label="Legend">
+                      {legend.map((g) => (
+                        <span key={g} className="flex items-center gap-1.5 text-xs">
+                          <span
+                            className="inline-block h-3 w-3 rounded-full"
+                            style={{ background: colorForGroup(g) }}
+                            aria-hidden="true"
+                          />
+                          <code className="font-mono">{g}</code>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <ForceGraph data={graph!} />
+                </div>
+              ) : (
+                <CypherResult result={result} />
+              )}
+            </div>
+          )}
         </CardContent>
       )}
     </Card>
