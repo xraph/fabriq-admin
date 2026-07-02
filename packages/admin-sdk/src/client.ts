@@ -461,8 +461,10 @@ export interface OutboxEvent {
 
 /** Filters + paging for an outbox event query. */
 export interface EventsQuery {
-  aggregate?: string
-  type?: string
+  /** Match any of these aggregate types (OR / SQL IN). */
+  aggregate?: string[]
+  /** Match any of these event types (OR / SQL IN). */
+  type?: string[]
   aggId?: string
   published?: boolean
   limit?: number
@@ -478,6 +480,16 @@ export interface EventsPage {
 /** Unpublished outbox depth (relay backlog). */
 export interface EventsBacklog {
   unpublished: number
+}
+
+/**
+ * Distinct aggregate types and event types present in the tenant's outbox —
+ * used to populate the events filter comboboxes (like listEntityTypes for the
+ * entity-type combobox).
+ */
+export interface EventFacets {
+  aggregates: string[]
+  types: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -925,16 +937,25 @@ export class FabriqClient {
     type: string
     q: string
     limit?: number
+    offset?: number
+    /** Indexed column, optionally suffixed " DESC". Empty = by relevance. */
+    sort?: string
+    /** Equality filters over indexed fields, AND-ed (field → value). */
+    filter?: Record<string, string>
   }): Promise<{ items: EntityRecord[] }> {
-    const query: Record<string, string | number | undefined> = {
-      type: params.type,
-      q: params.q,
+    const p = new URLSearchParams()
+    p.set("type", params.type)
+    p.set("q", params.q)
+    if (params.limit !== undefined) p.set("limit", String(params.limit))
+    if (params.offset !== undefined) p.set("offset", String(params.offset))
+    if (params.sort) p.set("sort", params.sort)
+    // Repeated ?filter=field:value params (server AND-s them via query.Eqs).
+    for (const [k, v] of Object.entries(params.filter ?? {})) {
+      if (k && v) p.append("filter", `${k}:${v}`)
     }
-    if (params.limit !== undefined) query.limit = params.limit
     return this.transport.request<{ items: EntityRecord[] }>({
       method: "GET",
-      path: `${this.baseUrl}/search`,
-      query,
+      path: `${this.baseUrl}/search?${p.toString()}`,
     })
   }
 
@@ -951,6 +972,8 @@ export class FabriqClient {
     query?: string
     id?: string
     k?: number
+    /** Restrict matches to embeddings whose meta contains all pairs (AND-ed). */
+    filter?: Record<string, string>
   }): Promise<{ matches: VectorMatch[] }> {
     return this.transport.request<{ matches: VectorMatch[] }>({
       method: "POST",
@@ -1263,8 +1286,9 @@ export class FabriqClient {
    */
   listEvents(q: EventsQuery = {}): Promise<EventsPage> {
     const params = new URLSearchParams()
-    if (q.aggregate) params.set("aggregate", q.aggregate)
-    if (q.type) params.set("type", q.type)
+    // aggregate/type are multi-valued (OR): one repeated query param per value.
+    for (const a of q.aggregate ?? []) if (a) params.append("aggregate", a)
+    for (const t of q.type ?? []) if (t) params.append("type", t)
     if (q.aggId) params.set("aggId", q.aggId)
     if (q.published !== undefined) params.set("published", String(q.published))
     if (q.limit) params.set("limit", String(q.limit))
@@ -1282,6 +1306,18 @@ export class FabriqClient {
       method: "GET",
       path: `${this.baseUrl}/events/backlog`,
     })
+  }
+
+  /**
+   * GET /events/facets — the distinct aggregate types and event types in the
+   * active tenant's outbox, for populating the events filter comboboxes.
+   */
+  async eventFacets(): Promise<EventFacets> {
+    const res = await this.transport.request<Partial<EventFacets>>({
+      method: "GET",
+      path: `${this.baseUrl}/events/facets`,
+    })
+    return { aggregates: res?.aggregates ?? [], types: res?.types ?? [] }
   }
 
   /**
@@ -1586,6 +1622,39 @@ export class FabriqClient {
     return this.transport.request({
       method: "DELETE",
       path: `${this.baseUrl}/plugins/${encodeURIComponent(id)}`,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Session (login gate)
+  // -------------------------------------------------------------------------
+
+  /**
+   * POST /login — exchange a username/password for a session token.
+   *
+   * Body `{username,password}` → `{token,expiresAt}`. Invalid credentials
+   * surface as a thrown HttpTransportError with `.status` 401. Does not
+   * persist the returned token — callers (e.g. the dashboard login gate)
+   * should pass it to `setSessionToken`.
+   */
+  login(username: string, password: string): Promise<{ token: string; expiresAt: string }> {
+    return this.transport.request<{ token: string; expiresAt: string }>({
+      method: "POST",
+      path: `${this.baseUrl}/login`,
+      body: { username, password },
+    })
+  }
+
+  /**
+   * POST /logout — invalidate the current session server-side.
+   *
+   * Does not clear the locally stored token — callers should pair this with
+   * `clearSessionToken`.
+   */
+  logout(): Promise<void> {
+    return this.transport.request<void>({
+      method: "POST",
+      path: `${this.baseUrl}/logout`,
     })
   }
 

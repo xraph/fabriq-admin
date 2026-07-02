@@ -210,6 +210,41 @@ describe("FabriqClient", () => {
     expect(result).toEqual([])
   })
 
+  it("eventFacets — GETs /events/facets and returns aggregates + types", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ aggregates: ["order", "product"], types: ["order.deleted"] })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.eventFacets()
+
+    expect(result).toEqual({ aggregates: ["order", "product"], types: ["order.deleted"] })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/events/facets")
+  })
+
+  it("eventFacets — defaults missing arrays to []", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({})
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.eventFacets()
+
+    expect(result).toEqual({ aggregates: [], types: [] })
+  })
+
+  it("listEvents — encodes multi-valued aggregate/type as repeated query params", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ items: [], nextCursor: "" })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.listEvents({ aggregate: ["order", "product"], type: ["order.deleted"] })
+
+    const path = transport.lastRequest?.path ?? ""
+    expect(path).toContain("aggregate=order")
+    expect(path).toContain("aggregate=product")
+    expect(path).toContain("type=order.deleted")
+  })
+
   it("getEntitySchema — GETs /schema with type query param", async () => {
     const transport = new FakeTransport()
     const schema = {
@@ -295,8 +330,31 @@ describe("FabriqClient", () => {
 
     expect(result).toEqual({ items })
     expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
-    expect(transport.lastRequest?.path).toBe("http://localhost:9000/search")
-    expect(transport.lastRequest?.query).toEqual({ type: "product", q: "wid", limit: 5 })
+    const path = transport.lastRequest?.path ?? ""
+    expect(path).toContain("http://localhost:9000/search?")
+    expect(path).toContain("type=product")
+    expect(path).toContain("q=wid")
+    expect(path).toContain("limit=5")
+  })
+
+  it("searchText — encodes offset, sort, and equality filters", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ items: [] })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.searchText({
+      type: "product",
+      q: "x",
+      offset: 20,
+      sort: "price DESC",
+      filter: { status: "active", kind: "pump" },
+    })
+
+    const path = transport.lastRequest?.path ?? ""
+    expect(path).toContain("offset=20")
+    expect(path).toContain("sort=price+DESC")
+    expect(path).toContain("filter=status%3Aactive")
+    expect(path).toContain("filter=kind%3Apump")
   })
 
   it("searchText — omits limit from query when not provided", async () => {
@@ -306,7 +364,10 @@ describe("FabriqClient", () => {
     const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
     await client.searchText({ type: "product", q: "x" })
 
-    expect(transport.lastRequest?.query).toEqual({ type: "product", q: "x" })
+    const path = transport.lastRequest?.path ?? ""
+    expect(path).toContain("type=product")
+    expect(path).toContain("q=x")
+    expect(path).not.toContain("limit=")
   })
 
   it("searchVector — POST /search/vector forwards the body (text query)", async () => {
@@ -925,5 +986,38 @@ describe("FabriqClient", () => {
     expect(transport.lastRequest?.path).toBe("http://localhost:9000/schema/ddl")
     expect(transport.lastRequest?.body).toEqual({ sql: "CREATE TABLE z (id text)" })
     expect(res.ok).toBe(true)
+  })
+
+  it("login — POST /login with {username,password}, returns {token,expiresAt}", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ token: "tok_abc123", expiresAt: "2026-07-02T00:00:00Z" })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.login("alice", "hunter2")
+
+    expect(result).toEqual({ token: "tok_abc123", expiresAt: "2026-07-02T00:00:00Z" })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/login")
+    expect(transport.lastRequest?.body).toEqual({ username: "alice", password: "hunter2" })
+  })
+
+  it("login — surfaces a 401 as a thrown HttpTransportError", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(new HttpTransportError(401, '{"error":"invalid credentials"}'))
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await expect(client.login("alice", "wrong")).rejects.toMatchObject({ status: 401 })
+  })
+
+  it("logout — POST /logout", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse(undefined)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.logout()
+
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/logout")
   })
 })
