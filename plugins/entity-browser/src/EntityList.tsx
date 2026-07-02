@@ -30,7 +30,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table"
-import { Search, Database, Plus } from "lucide-react"
+import { Search, Database, Plus, FileStack } from "lucide-react"
 import { EntityForm } from "./EntityForm"
 
 const PAGE_LIMIT = 50
@@ -160,6 +160,20 @@ export function EntityList({ params }: { params?: { type?: string } } = {}) {
     ["entity-types"],
     (c) => c.listEntityTypes(),
   )
+
+  // Registered CRDT/document entities — drives the "Document" tag next to the
+  // active type. Best-effort: the crdt subsystem may be absent/unavailable,
+  // in which case the tag simply doesn't render (no retry, no error UI).
+  const { data: crdtEntities } = useFabriqQuery(
+    ["crdt-entities"],
+    (c) => c.getCrdtEntities(),
+    { retry: false },
+  )
+  const docTypes = useMemo(
+    () => new Set((crdtEntities?.items ?? []).map((e) => e.entity)),
+    [crdtEntities],
+  )
+  const isDocumentType = trimmedType.length > 0 && docTypes.has(trimmedType)
 
   // Schema for the selected type — drives the data-grid columns.
   const { data: schema } = useFabriqQuery(
@@ -342,6 +356,12 @@ export function EntityList({ params }: { params?: { type?: string } } = {}) {
               className="flex-1"
               placeholder="Entity type (e.g. order)…"
             />
+            {isDocumentType && (
+              <Badge variant="secondary" className="gap-1" title="Document (CRDT) entity">
+                <FileStack className="h-3 w-3" aria-hidden="true" />
+                Document
+              </Badge>
+            )}
             {trimmedType.length > 0 && (
               <Button onClick={() => setCreateOpen(true)} aria-label={`New ${trimmedType}`}>
                 <Plus className="h-4 w-4 mr-1" />
