@@ -207,6 +207,17 @@ function RawJson({ data }: { data: Record<string, unknown> }) {
 
 type ViewMode = "fields" | "raw"
 
+/**
+ * Resolve a CRDT document id from the route (type, id). A materialized document
+ * row uses the full docId ("<entity>/<id>") as its relational `id`, so the route
+ * `id` may already carry the entity prefix — in that case return it unchanged
+ * (prefixing again produced the broken "note/note/roadmap" docId). Otherwise
+ * build "<type>/<id>" from a bare id.
+ */
+export function resolveDocId(type: string, id: string): string {
+  return id.startsWith(`${type}/`) ? id : `${type}/${id}`
+}
+
 export function EntityDetail({ params }: { params?: Record<string, string> }) {
   const id = params?.id ?? ""
   const type = params?.type ?? ""
@@ -223,7 +234,12 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
   const { data, isLoading, isError } = useFabriqQuery(
     ["entity", type, id],
     (client) => client.getEntity(id, { type }),
-    { enabled: Boolean(id) && Boolean(type) },
+    {
+      enabled: Boolean(id) && Boolean(type),
+      // A document entity often has no materialized relational row → getEntity
+      // 404s. A 404 is definitive; don't retry it (avoids the 4× request storm).
+      retry: (count, err) => (err as { status?: number })?.status !== 404 && count < 3,
+    },
   )
 
   // Per-type capabilities — which subsystems THIS entity type participates in.
@@ -249,7 +265,7 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
   const crdtInfo = (crdtEnts?.items ?? []).find((e) => e.entity === type)
   const isPureDocument = crdtInfo?.kind === "document"
 
-  const docId = `${type}/${id}`
+  const docId = resolveDocId(type, id)
 
   const { data: crdtDoc } = useFabriqQuery(
     ["crdt", docId],
