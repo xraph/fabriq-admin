@@ -764,7 +764,7 @@ export interface FabriqClientOptions {
 }
 
 export class FabriqClient {
-  private readonly baseUrl: string
+  readonly baseUrl: string
   private readonly transport: FabriqTransport
 
   constructor({ baseUrl, transport }: FabriqClientOptions) {

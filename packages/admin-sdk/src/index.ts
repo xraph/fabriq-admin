@@ -66,7 +66,7 @@ export type { MultiSuggestComboboxProps } from "./MultiSuggestCombobox"
 export { ConfirmProvider, useConfirm } from "./confirm"
 export type { ConfirmOptions, ConfirmFn } from "./confirm"
 
-export { parseDsn, dsnBaseUrl } from "./dsn"
+export { parseDsn, dsnBaseUrl, buildDsn } from "./dsn"
 export type { ParsedDsn } from "./dsn"
 export { connect } from "./connect"
 
