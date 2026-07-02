@@ -1,4 +1,4 @@
-import { useFabriqClient, useTenantContext, useTenant } from "@fabriq/admin-sdk"
+import { useFabriqClient, useTenantContext, useTenant } from "@fabriq-ai/admin-sdk"
 import { ConnectionInfoCard } from "./ConnectionInfoCard"
 import { KeysCard } from "./KeysCard"
 

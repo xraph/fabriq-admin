@@ -26,73 +26,73 @@ importers:
 
   apps/host:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/plugin-api-console':
+      '@fabriq-ai/plugin-api-console':
         specifier: workspace:*
         version: link:../../plugins/api-console
-      '@fabriq/plugin-cache':
+      '@fabriq-ai/plugin-cache':
         specifier: workspace:*
         version: link:../../plugins/cache
-      '@fabriq/plugin-commands':
+      '@fabriq-ai/plugin-commands':
         specifier: workspace:*
         version: link:../../plugins/commands
-      '@fabriq/plugin-connection':
+      '@fabriq-ai/plugin-connection':
         specifier: workspace:*
         version: link:../../plugins/connection
-      '@fabriq/plugin-crdt':
+      '@fabriq-ai/plugin-crdt':
         specifier: workspace:*
         version: link:../../plugins/crdt
-      '@fabriq/plugin-distill':
+      '@fabriq-ai/plugin-distill':
         specifier: workspace:*
         version: link:../../plugins/distill
-      '@fabriq/plugin-entity-browser':
+      '@fabriq-ai/plugin-entity-browser':
         specifier: workspace:*
         version: link:../../plugins/entity-browser
-      '@fabriq/plugin-events':
+      '@fabriq-ai/plugin-events':
         specifier: workspace:*
         version: link:../../plugins/events
-      '@fabriq/plugin-files':
+      '@fabriq-ai/plugin-files':
         specifier: workspace:*
         version: link:../../plugins/files
-      '@fabriq/plugin-graph':
+      '@fabriq-ai/plugin-graph':
         specifier: workspace:*
         version: link:../../plugins/graph
-      '@fabriq/plugin-live':
+      '@fabriq-ai/plugin-live':
         specifier: workspace:*
         version: link:../../plugins/live
-      '@fabriq/plugin-migrations':
+      '@fabriq-ai/plugin-migrations':
         specifier: workspace:*
         version: link:../../plugins/migrations
-      '@fabriq/plugin-overview':
+      '@fabriq-ai/plugin-overview':
         specifier: workspace:*
         version: link:../../plugins/overview
-      '@fabriq/plugin-plugins-manager':
+      '@fabriq-ai/plugin-plugins-manager':
         specifier: workspace:*
         version: link:../../plugins/plugins-manager
-      '@fabriq/plugin-projections':
+      '@fabriq-ai/plugin-projections':
         specifier: workspace:*
         version: link:../../plugins/projections
-      '@fabriq/plugin-query':
+      '@fabriq-ai/plugin-query':
         specifier: workspace:*
         version: link:../../plugins/query
-      '@fabriq/plugin-recall':
+      '@fabriq-ai/plugin-recall':
         specifier: workspace:*
         version: link:../../plugins/recall
-      '@fabriq/plugin-search':
+      '@fabriq-ai/plugin-search':
         specifier: workspace:*
         version: link:../../plugins/search
-      '@fabriq/plugin-spatial':
+      '@fabriq-ai/plugin-spatial':
         specifier: workspace:*
         version: link:../../plugins/spatial
-      '@fabriq/plugin-telemetry':
+      '@fabriq-ai/plugin-telemetry':
         specifier: workspace:*
         version: link:../../plugins/telemetry
-      '@fabriq/plugin-types':
+      '@fabriq-ai/plugin-types':
         specifier: workspace:*
         version: link:../../plugins/types
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-query':
@@ -141,10 +141,10 @@ importers:
 
   apps/remote-example:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-query':
@@ -175,7 +175,7 @@ importers:
 
   packages/admin-sdk:
     dependencies:
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../ui
       lucide-react:
@@ -294,10 +294,10 @@ importers:
 
   plugins/api-console:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -316,10 +316,10 @@ importers:
 
   plugins/cache:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -338,10 +338,10 @@ importers:
 
   plugins/commands:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -360,10 +360,10 @@ importers:
 
   plugins/connection:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -382,10 +382,10 @@ importers:
 
   plugins/crdt:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -404,10 +404,10 @@ importers:
 
   plugins/distill:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -426,10 +426,10 @@ importers:
 
   plugins/entity-browser:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-table':
@@ -451,10 +451,10 @@ importers:
 
   plugins/events:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -473,10 +473,10 @@ importers:
 
   plugins/files:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -495,10 +495,10 @@ importers:
 
   plugins/graph:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       d3-force:
@@ -523,10 +523,10 @@ importers:
 
   plugins/live:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -545,10 +545,10 @@ importers:
 
   plugins/migrations:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -567,10 +567,10 @@ importers:
 
   plugins/overview:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -589,10 +589,10 @@ importers:
 
   plugins/plugins-manager:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -611,10 +611,10 @@ importers:
 
   plugins/projections:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -633,10 +633,10 @@ importers:
 
   plugins/query:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@monaco-editor/react':
@@ -664,10 +664,10 @@ importers:
 
   plugins/recall:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -686,10 +686,10 @@ importers:
 
   plugins/search:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -708,10 +708,10 @@ importers:
 
   plugins/spatial:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -730,10 +730,10 @@ importers:
 
   plugins/telemetry:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -752,10 +752,10 @@ importers:
 
   plugins/types:
     dependencies:
-      '@fabriq/admin-sdk':
+      '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
-      '@fabriq/ui':
+      '@fabriq-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:

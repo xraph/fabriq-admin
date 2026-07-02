@@ -118,7 +118,7 @@ See every builtin and remote plugin with its source and load status, and registe
 
 **Library‑first mounting.** `<FabriqAdmin>` ([`packages/admin-sdk`](packages/admin-sdk)) owns no page and sets up no global router. It renders into the container you give it, scopes all CSS to `.fabriq-admin`, and bridges to your host router via optional `routerPush`/`routerReplace` props. Routing strategy is selectable: `virtual` (in‑memory, embed‑safe), `hash`, or `path`.
 
-**Runtime Module Federation.** The host ([`apps/host/vite.config.ts`](apps/host/vite.config.ts)) shares singletons — `react`, `react-dom`, `@tanstack/react-query`, `@fabriq/admin-sdk`, and `@fabriq/ui` — so runtime‑loaded remotes use the host's React and context instances. Remote plugins are registered by URL at runtime from the Plugins page; there are no statically‑declared remotes.
+**Runtime Module Federation.** The host ([`apps/host/vite.config.ts`](apps/host/vite.config.ts)) shares singletons — `react`, `react-dom`, `@tanstack/react-query`, `@fabriq-ai/admin-sdk`, and `@fabriq-ai/ui` — so runtime‑loaded remotes use the host's React and context instances. Remote plugins are registered by URL at runtime from the Plugins page; there are no statically‑declared remotes.
 
 **Plugins are the unit of composition.** A plugin is a small object (`definePlugin({ id, name, capabilities, navItems, routes, panels })`). Builtins are passed to `<FabriqAdmin>` as an array; remotes are fetched, validated, and merged into the same `PluginRegistry`. An optional `PluginStore` persists remote specs (HTTP or `localStorage`) across reloads.
 
@@ -161,7 +161,7 @@ The API base URL defaults to `http://localhost:8080/admin` and can be overridden
 ### Optional: run the remote‑plugin example
 
 ```bash
-pnpm --filter @fabriq/remote-example dev   # → http://localhost:5175 (CORS enabled)
+pnpm --filter @fabriq-ai/remote-example dev   # → http://localhost:5175 (CORS enabled)
 ```
 
 Then add its `remoteEntry.js` URL from the **Plugins** page to load it into the host at runtime.
@@ -171,9 +171,9 @@ Then add its `remoteEntry.js` URL from the **Plugins** page to load it into the 
 ## Embedding in your app
 
 ```tsx
-import { FabriqAdmin, FabriqClient, createHttpTransport, createTenantStore } from "@fabriq/admin-sdk"
+import { FabriqAdmin, FabriqClient, createHttpTransport, createTenantStore } from "@fabriq-ai/admin-sdk"
 import { builtinPlugins } from "./plugins"
-import "@fabriq/ui/styles.css"
+import "@fabriq-ai/ui/styles.css"
 
 const tenantStore = createTenantStore()
 const baseUrl = "https://your-host/admin"
@@ -203,11 +203,11 @@ export function AdminRoute() {
 ```
 fabriq-admin/
 ├── apps/
-│   ├── host/                 @fabriq/host           — Module Federation host / dev shell
-│   └── remote-example/       @fabriq/remote-example — standalone remote‑plugin example
+│   ├── host/                 @fabriq-ai/host           — Module Federation host / dev shell
+│   └── remote-example/       @fabriq-ai/remote-example — standalone remote‑plugin example
 ├── packages/
-│   ├── admin-sdk/            @fabriq/admin-sdk      — <FabriqAdmin>, plugin system, client, transport, router, tenant
-│   └── ui/                   @fabriq/ui             — Base UI + shadcn components, scoped Tailwind v4 theme
+│   ├── admin-sdk/            @fabriq-ai/admin-sdk      — <FabriqAdmin>, plugin system, client, transport, router, tenant
+│   └── ui/                   @fabriq-ai/ui             — Base UI + shadcn components, scoped Tailwind v4 theme
 └── plugins/                  17 builtin feature plugins
     ├── overview  entity-browser  search  recall  live  graph  spatial
     ├── telemetry  events  projections  cache  files  crdt  distill
@@ -219,7 +219,7 @@ Packages are consumed as raw TypeScript source (`main: ./src/index.ts`) — no p
 ### Writing a plugin
 
 ```ts
-import { definePlugin } from "@fabriq/admin-sdk"
+import { definePlugin } from "@fabriq-ai/admin-sdk"
 import { Boxes } from "lucide-react"
 import { MyPanel } from "./MyPanel"
 

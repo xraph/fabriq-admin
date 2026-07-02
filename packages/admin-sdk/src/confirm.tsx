@@ -8,7 +8,7 @@ import {
   AlertDialogDescription,
   AlertDialogAction,
   AlertDialogCancel,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 
 export interface ConfirmOptions {
   title: string

@@ -5,7 +5,7 @@ import {
   FabriqAdmin,
   HttpTransportError,
   type FabriqTransport,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { crdtPlugin, CrdtPage } from "./index"
 
 // ---------------------------------------------------------------------------

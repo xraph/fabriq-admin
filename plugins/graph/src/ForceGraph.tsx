@@ -9,7 +9,7 @@ import {
   type SimulationNodeDatum,
   type SimulationLinkDatum,
 } from "d3-force"
-import type { GraphData, GraphNode, GraphEdge } from "@fabriq/admin-sdk"
+import type { GraphData, GraphNode, GraphEdge } from "@fabriq-ai/admin-sdk"
 
 // ---------------------------------------------------------------------------
 // Internal simulation shapes

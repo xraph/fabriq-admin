@@ -6,7 +6,7 @@ import {
   HttpTransportError,
   type FabriqTransport,
   type GraphData,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { graphPlugin, GraphPage, ForceGraph } from "./index"
 
 // ---------------------------------------------------------------------------

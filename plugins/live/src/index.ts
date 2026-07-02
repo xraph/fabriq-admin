@@ -1,4 +1,4 @@
-import { definePlugin } from "@fabriq/admin-sdk"
+import { definePlugin } from "@fabriq-ai/admin-sdk"
 import { LivePage } from "./LivePage"
 
 export const livePlugin = definePlugin({

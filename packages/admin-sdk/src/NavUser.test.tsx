@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import React from "react"
 import { render, screen, fireEvent } from "@testing-library/react"
-import { SidebarProvider } from "@fabriq/ui"
+import { SidebarProvider } from "@fabriq-ai/ui"
 import { NavUser } from "./NavUser"
 
 function renderUser(override: "light" | "dark" | null = null) {

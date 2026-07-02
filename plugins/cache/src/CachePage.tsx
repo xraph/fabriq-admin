@@ -5,7 +5,7 @@ import {
   HttpTransportError,
   type CacheInfo,
   type CacheStats,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -23,7 +23,7 @@ import {
   TableRow,
   TableCell,
   Skeleton,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { DatabaseZap, RefreshCw, Trash2 } from "lucide-react"
 
 function fmtTtl(seconds: number): string {

@@ -2,7 +2,7 @@ import React, { useState } from "react"
 import {
   useFabriqQuery, useFabriqClient, useQueryClient, usePluginHost,
   type SchemaColumnInput,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card, CardHeader, CardTitle, CardDescription, CardContent,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
@@ -11,7 +11,7 @@ import {
   AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
   Input, Label, Button,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Plus } from "lucide-react"
 import { useSchemaWriteEnabled } from "./useSchemaWrite"
 import { SchemaFieldEditor } from "./SchemaFieldEditor"

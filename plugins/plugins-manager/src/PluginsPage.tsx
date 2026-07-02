@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { usePluginHost, type PluginEntry } from "@fabriq/admin-sdk"
+import { usePluginHost, type PluginEntry } from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -17,7 +17,7 @@ import {
   Input,
   Alert,
   AlertDescription,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Plug, Trash2, RefreshCw } from "lucide-react"
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react"
-import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, Input, Label, Alert, AlertDescription } from "@fabriq/ui"
-import { useResolvedTheme } from "@fabriq/admin-sdk"
+import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, Input, Label, Alert, AlertDescription } from "@fabriq-ai/ui"
+import { useResolvedTheme } from "@fabriq-ai/admin-sdk"
 
 export interface LoginProps {
   /**

@@ -5,7 +5,7 @@ import {
   useTenantContext,
   useTenant,
   CapabilityBadges,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -17,7 +17,7 @@ import {
   Skeleton,
   Alert,
   AlertDescription,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Activity, Database, Plug, Building2, ArrowRight, Layers } from "lucide-react"
 
 // ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ function PluginsCard() {
       </CardHeader>
       <CardContent>
         <div className="grid gap-3">
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="flex gap-2 text-center">
             <StatTile label="Total" value={plugins.length} />
             <StatTile label="Builtin" value={builtinCount} />
             <StatTile label="Remote" value={remoteCount} />
@@ -263,7 +263,7 @@ function PluginsCard() {
 
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+    <div className="flex-1 rounded-md border border-border bg-muted/30 px-3 py-2">
       <div className="text-lg font-semibold">{value}</div>
       <div className="text-xs text-muted-foreground">{label}</div>
     </div>

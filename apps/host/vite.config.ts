@@ -23,7 +23,7 @@ import tailwindcss from "@tailwindcss/vite"
 export default defineConfig({
   resolve: {
     alias: {
-      // @fabriq/ui's source uses the shadcn "@/..." convention for its own
+      // @fabriq-ai/ui's source uses the shadcn "@/..." convention for its own
       // internal modules (e.g. "@/lib/utils", "@/components/ui/button"). Because
       // the package is consumed as raw source (main: ./src/index.ts), the host's
       // resolver must map "@" to the ui package's src. No other package in the
@@ -43,7 +43,7 @@ export default defineConfig({
       },
       // Shared singleton modules — critical so runtime plugins share the host's
       // instances. react/react-dom/react-query must be one instance so hooks and
-      // context work across the boundary. @fabriq/admin-sdk and @fabriq/ui MUST
+      // context work across the boundary. @fabriq-ai/admin-sdk and @fabriq-ai/ui MUST
       // also be shared: their React contexts (FabriqClientContext,
       // PluginHostContext, theme tokens) are identity-compared, so a remote with
       // its own copy would throw "must be used within <FabriqProvider>".
@@ -51,8 +51,8 @@ export default defineConfig({
         react: { singleton: true, requiredVersion: "^19.0.0" },
         "react-dom": { singleton: true, requiredVersion: "^19.0.0" },
         "@tanstack/react-query": { singleton: true, requiredVersion: "^5.59.0" },
-        "@fabriq/admin-sdk": { singleton: true, requiredVersion: false },
-        "@fabriq/ui": { singleton: true, requiredVersion: false },
+        "@fabriq-ai/admin-sdk": { singleton: true, requiredVersion: false },
+        "@fabriq-ai/ui": { singleton: true, requiredVersion: false },
       },
     }),
   ],

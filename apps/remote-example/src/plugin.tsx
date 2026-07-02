@@ -1,11 +1,11 @@
 import React from "react"
-import { definePlugin, useFabriqQuery } from "@fabriq/admin-sdk"
+import { definePlugin, useFabriqQuery } from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 
 // ---------------------------------------------------------------------------
 // RemoteStats — the view component exposed by this remote

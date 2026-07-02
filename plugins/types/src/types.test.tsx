@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import React from "react"
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react"
-import { FabriqClient, FabriqAdmin, type FabriqTransport } from "@fabriq/admin-sdk"
+import { FabriqClient, FabriqAdmin, type FabriqTransport } from "@fabriq-ai/admin-sdk"
 import { typesPlugin } from "./index"
 
 function fakeTransport(opts?: { caps?: Record<string, boolean> }): FabriqTransport {

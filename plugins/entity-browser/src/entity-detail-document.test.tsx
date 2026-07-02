@@ -6,7 +6,7 @@ import {
   QueryClient,
   HttpTransportError,
   type FabriqTransport,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { entityBrowserPlugin } from "./index"
 
 function makeClient(handler: (opts: any) => unknown) {

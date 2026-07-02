@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Boxes, MoreHorizontal, Pin, PinOff, ArrowUpRight } from "lucide-react"
 import { useFabriqQuery } from "./provider"
 import { usePluginHost } from "./FabriqAdmin"

@@ -10,7 +10,7 @@ import {
   type EntityRecord,
   type VectorMatch,
   type VectorEmbeddingInfo,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -28,7 +28,7 @@ import {
   TableHead,
   TableRow,
   TableCell,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Search as SearchIcon } from "lucide-react"
 
 // ---------------------------------------------------------------------------

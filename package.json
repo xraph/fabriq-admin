@@ -5,7 +5,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run",
-    "dev": "pnpm --filter @fabriq/host dev"
+    "fmt": "pnpm run format",
+    "dev": "pnpm --filter @fabriq-ai/host dev"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

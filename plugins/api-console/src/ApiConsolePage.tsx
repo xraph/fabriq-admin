@@ -4,7 +4,7 @@ import {
   useTenantContext,
   useTenant,
   type RawResponse,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -16,7 +16,7 @@ import {
   Input,
   Alert,
   AlertDescription,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Terminal, Send } from "lucide-react"
 
 // ---------------------------------------------------------------------------

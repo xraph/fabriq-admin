@@ -6,7 +6,7 @@ import {
   type DigestNode,
   type DigestView,
   type DigestChild,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -18,7 +18,7 @@ import {
   AlertDescription,
   Skeleton,
   ScrollArea,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { GitMerge, ChevronRight, ChevronDown, Copy } from "lucide-react"
 
 // ---------------------------------------------------------------------------

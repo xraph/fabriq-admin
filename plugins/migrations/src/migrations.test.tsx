@@ -5,7 +5,7 @@ import {
   FabriqAdmin,
   HttpTransportError,
   type FabriqTransport,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { migrationsPlugin } from "./index"
 
 function makeClient(caps: string[], opts?: { ddlError?: boolean }) {

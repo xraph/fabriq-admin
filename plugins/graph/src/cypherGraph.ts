@@ -1,4 +1,4 @@
-import type { GraphData, GraphNode, GraphEdge, GraphQueryResult } from "@fabriq/admin-sdk"
+import type { GraphData, GraphNode, GraphEdge, GraphQueryResult } from "@fabriq-ai/admin-sdk"
 
 // ---------------------------------------------------------------------------
 // Cypher-result → graph projection

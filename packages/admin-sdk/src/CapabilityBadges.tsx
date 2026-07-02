@@ -1,5 +1,5 @@
 import React from "react"
-import { Badge } from "@fabriq/ui"
+import { Badge } from "@fabriq-ai/ui"
 import {
   Database,
   Sparkles,

@@ -1,4 +1,4 @@
-import { definePlugin } from "@fabriq/admin-sdk"
+import { definePlugin } from "@fabriq-ai/admin-sdk"
 import { EventsPage } from "./EventsPage"
 
 export const eventsPlugin = definePlugin({

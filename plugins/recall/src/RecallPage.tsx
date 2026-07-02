@@ -6,7 +6,7 @@ import {
   EntityTypeCombobox,
   type RecallItem,
   type RecallPack,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -19,7 +19,7 @@ import {
   Alert,
   AlertDescription,
   Skeleton,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Sparkles, Search, Share2 } from "lucide-react"
 
 // ---------------------------------------------------------------------------

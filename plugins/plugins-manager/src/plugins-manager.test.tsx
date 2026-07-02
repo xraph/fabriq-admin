@@ -7,7 +7,7 @@ import {
   type FabriqTransport,
   type FabriqAdminPlugin,
   type NewRemotePluginSpec,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { pluginsManagerPlugin, PluginsPage } from "./index"
 
 // ---------------------------------------------------------------------------

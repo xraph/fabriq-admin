@@ -10,8 +10,8 @@ import {
   HttpTransportError,
   type FabriqTransport,
   type TenantStore,
-} from "@fabriq/admin-sdk"
-import { Button } from "@fabriq/ui"
+} from "@fabriq-ai/admin-sdk"
+import { Button } from "@fabriq-ai/ui"
 import { Login } from "./Login"
 
 // ---------------------------------------------------------------------------

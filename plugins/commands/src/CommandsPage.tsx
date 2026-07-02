@@ -8,7 +8,7 @@ import {
   type CommandOp,
   type CommandInput,
   type CommandResult,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -20,7 +20,7 @@ import {
   Input,
   Alert,
   AlertDescription,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { SquareTerminal, Play, AlertTriangle } from "lucide-react"
 
 const OPS: CommandOp[] = ["create", "update", "delete", "upsert"]

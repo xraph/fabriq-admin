@@ -7,7 +7,7 @@ import {
   type GraphData,
   type GraphNode,
   type GraphQueryResult,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -25,7 +25,7 @@ import {
   TableHead,
   TableRow,
   TableCell,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Share2, Play, ChevronDown, ChevronRight, Table2 } from "lucide-react"
 import { ForceGraph, colorForGroup, groupOf } from "./ForceGraph"
 import { graphFromCypher, CYPHER_PRESETS } from "./cypherGraph"

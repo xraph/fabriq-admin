@@ -1,5 +1,5 @@
 import React from "react"
-import { Alert, AlertTitle, AlertDescription, Button } from "@fabriq/ui"
+import { Alert, AlertTitle, AlertDescription, Button } from "@fabriq-ai/ui"
 
 export interface PluginErrorBoundaryProps {
   /** Resets the boundary when this value changes (e.g. the current route path). */

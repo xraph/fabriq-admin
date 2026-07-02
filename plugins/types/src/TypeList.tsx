@@ -1,10 +1,10 @@
 import React, { useState } from "react"
-import { useFabriqQuery, usePluginHost } from "@fabriq/admin-sdk"
+import { useFabriqQuery, usePluginHost } from "@fabriq-ai/admin-sdk"
 import {
   Card, CardHeader, CardTitle, CardDescription, CardContent,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
   Button, Skeleton, Alert, AlertTitle, AlertDescription,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Boxes, Plus } from "lucide-react"
 import { useSchemaWriteEnabled } from "./useSchemaWrite"
 import { CreateTypeDialog } from "./CreateTypeDialog"

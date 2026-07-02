@@ -12,7 +12,7 @@ import {
   FabriqProvider,
   createHttpTransport,
   QueryClient,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { RemoteStats } from "./plugin"
 
 const baseUrl = "http://localhost:8080/admin"

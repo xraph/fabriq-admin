@@ -7,7 +7,7 @@ import {
   setSessionToken,
   clearSessionToken,
   type FabriqTransport,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { connectionPlugin } from "./index"
 
 function makeClient(handler: (o: any) => unknown) {

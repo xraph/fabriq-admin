@@ -10,7 +10,7 @@ import {
   ComboboxItem,
   ComboboxValue,
   useComboboxAnchor,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 
 export interface MultiSuggestComboboxProps {
   /** Currently-selected values. */

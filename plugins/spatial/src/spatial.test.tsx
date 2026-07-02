@@ -9,7 +9,7 @@ import {
   type FabriqTransport,
   type PluginHostValue,
   type SpatialResult,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { spatialPlugin, SpatialPage } from "./index"
 
 // ---------------------------------------------------------------------------

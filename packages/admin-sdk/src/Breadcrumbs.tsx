@@ -6,7 +6,7 @@ import {
   BreadcrumbLink,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 
 export interface BreadcrumbsProps {
   sectionLabel: string

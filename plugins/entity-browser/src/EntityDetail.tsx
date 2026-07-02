@@ -10,7 +10,7 @@ import {
   CrdtSpecCard,
   SegmentsTable,
   HistoryRangeCard,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Button,
   Card,
@@ -38,7 +38,7 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { ArrowLeft, Copy, Check, Pencil, Trash2, Share2 } from "lucide-react"
 import { EntityForm } from "./EntityForm"
 

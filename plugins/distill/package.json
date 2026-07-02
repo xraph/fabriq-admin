@@ -1,5 +1,5 @@
 {
-  "name": "@fabriq/plugin-distill",
+  "name": "@fabriq-ai/plugin-distill",
   "version": "0.0.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -13,8 +13,8 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
-    "@fabriq/admin-sdk": "workspace:*",
-    "@fabriq/ui": "workspace:*",
+    "@fabriq-ai/admin-sdk": "workspace:*",
+    "@fabriq-ai/ui": "workspace:*",
     "lucide-react": "^0.456.0"
   },
   "devDependencies": {

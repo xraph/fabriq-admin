@@ -3,7 +3,7 @@ import {
 	Card, CardHeader, CardTitle, CardDescription, CardContent, Badge,
 	Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableCaption,
 	Button, Input,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import type { CrdtDocument, CrdtUpdates, CrdtEntityInfo, CrdtSegment, CrdtHistoryUpdate } from "./client"
 
 // --- helpers (moved verbatim from plugins/crdt/src/CrdtPage.tsx) ---

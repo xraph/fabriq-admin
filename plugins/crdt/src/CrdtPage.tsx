@@ -8,7 +8,7 @@ import {
   HistoryRangeCard,
   type CrdtDocument,
   type CrdtUpdates,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -20,7 +20,7 @@ import {
   Alert,
   AlertDescription,
   Skeleton,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { FileText, Play } from "lucide-react"
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ import {
   EntityTypeCombobox,
   type LiveEvent,
   type LiveDeltaEvent,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -20,7 +20,7 @@ import {
   Alert,
   AlertDescription,
   ScrollArea,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Activity, Play, Square } from "lucide-react"
 
 // ---------------------------------------------------------------------------

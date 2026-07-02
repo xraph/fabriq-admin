@@ -9,7 +9,7 @@ import {
   type FabriqTransport,
   type EntityRecord,
   type EntityPage,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { entityBrowserPlugin, EntityList, EntityDetail, EntityForm } from "./index"
 
 /**

@@ -6,7 +6,7 @@ import {
   ComboboxEmpty,
   ComboboxList,
   ComboboxItem,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 
 export interface SuggestComboboxProps {
   value: string

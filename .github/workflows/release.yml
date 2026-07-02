@@ -1,0 +1,98 @@
+name: Release
+
+# Tag-triggered npm release for the @fabriq-ai/* packages.
+#
+# Lockstep versioning: pushing a `vX.Y.Z` tag stamps EVERY publishable
+# workspace package (packages/* + plugins/*) to that version and publishes
+# them together to the public npm registry under the @fabriq-ai scope. The
+# two apps (apps/host, apps/remote-example) are `private: true` and are
+# skipped automatically by `pnpm -r publish`.
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# Or trigger it from the Actions UI via the release-dispatch.yml wrapper,
+# which validates the tag and pushes it with a PAT.
+#
+# Pre-release suffixes (v0.2.0-rc.1) publish under the `next` dist-tag instead
+# of `latest`, so `npm install @fabriq-ai/ui` never resolves a pre-release.
+#
+# Requires an NPM_TOKEN secret: an npm automation token with publish rights to
+# the @fabriq-ai org.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# One release run per tag; never cancel a publish in flight.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    name: Publish @fabriq-ai packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance (--provenance) attestation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve version + dist-tag from the tag
+        id: ver
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          # Anything with a pre-release suffix (contains a '-') ships as `next`.
+          if printf '%s' "$VERSION" | grep -q '-'; then
+            echo "dist_tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Releasing ${VERSION}"
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Stamp workspace versions to the tag (lockstep)
+        run: |
+          set -euo pipefail
+          # Bump every workspace package to the tag version. Private apps are
+          # bumped too but harmless — they are never published. workspace:*
+          # deps are rewritten to the concrete version by pnpm at publish time.
+          pnpm -r exec npm version "${{ steps.ver.outputs.version }}" \
+            --no-git-tag-version --allow-same-version
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          set -euo pipefail
+          pnpm -r publish \
+            --access public \
+            --tag "${{ steps.ver.outputs.dist_tag }}" \
+            --no-git-checks

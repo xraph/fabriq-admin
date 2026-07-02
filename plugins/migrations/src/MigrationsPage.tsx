@@ -6,7 +6,7 @@ import {
   HttpTransportError,
   type MigrationJob,
   type MigrationScaffold,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Button,
   Badge,
@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 
 type Tab = "migrations" | "drift" | "ddl"
 

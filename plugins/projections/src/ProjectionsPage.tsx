@@ -6,7 +6,7 @@ import {
   type ProjectionsInfo,
   type ProjectionStatus,
   type ReconcileResult,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -18,7 +18,7 @@ import {
   Alert,
   AlertDescription,
   Skeleton,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Workflow, RefreshCw, Share2, Search } from "lucide-react"
 
 // Color a projection status. Blue-green pointer states: live | building |

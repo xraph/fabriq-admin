@@ -5,7 +5,7 @@ import {
   useQueryClient,
   HttpTransportError,
   type FileNode,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardContent,
@@ -27,7 +27,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import {
   FolderTree,
   Folder,

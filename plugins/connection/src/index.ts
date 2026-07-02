@@ -1,4 +1,4 @@
-import { definePlugin } from "@fabriq/admin-sdk"
+import { definePlugin } from "@fabriq-ai/admin-sdk"
 import { ConnectionPage } from "./ConnectionPage"
 
 export const connectionPlugin = definePlugin({

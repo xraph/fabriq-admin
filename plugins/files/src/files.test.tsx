@@ -6,7 +6,7 @@ import {
   HttpTransportError,
   type FabriqTransport,
   type FileNode,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { filesPlugin, FilesPage } from "./index"
 
 // ---------------------------------------------------------------------------

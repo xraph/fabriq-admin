@@ -1,7 +1,7 @@
 import React from "react"
-import { Input, Button } from "@fabriq/ui"
+import { Input, Button } from "@fabriq-ai/ui"
 import { Trash2, Plus } from "lucide-react"
-import { isValidSchemaDefault, type SchemaColumnInput } from "@fabriq/admin-sdk"
+import { isValidSchemaDefault, type SchemaColumnInput } from "@fabriq-ai/admin-sdk"
 
 const KINDS = ["string", "number", "boolean", "time", "object"] as const
 

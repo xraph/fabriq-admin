@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import React from "react"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
-import { SidebarProvider } from "@fabriq/ui"
+import { SidebarProvider } from "@fabriq-ai/ui"
 import { TenantSwitcher } from "./TenantSwitcher"
 import { createTenantStore } from "./tenant"
 

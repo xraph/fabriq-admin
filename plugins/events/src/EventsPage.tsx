@@ -8,7 +8,7 @@ import {
   HttpTransportError,
   type OutboxEvent,
   type EventsQuery,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -27,7 +27,7 @@ import {
   TableRow,
   TableCell,
   Skeleton,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { ScrollText, RefreshCw, ChevronRight, ChevronDown } from "lucide-react"
 
 const PAGE = 50

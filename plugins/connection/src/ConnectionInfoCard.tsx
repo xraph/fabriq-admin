@@ -1,5 +1,5 @@
-import { getSessionToken, buildDsn, type FabriqClient } from "@fabriq/admin-sdk"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, Badge } from "@fabriq/ui"
+import { getSessionToken, buildDsn, type FabriqClient } from "@fabriq-ai/admin-sdk"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, Badge } from "@fabriq-ai/ui"
 import { CopyField, maskDsnCredential } from "./CopyField"
 
 /** Parse an HTTP base URL (e.g. http://localhost:8080/admin) into DSN parts. */

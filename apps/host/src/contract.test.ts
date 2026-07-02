@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { FabriqClient, createHttpTransport } from "@fabriq/admin-sdk"
+import { FabriqClient, createHttpTransport } from "@fabriq-ai/admin-sdk"
 
 // ---------------------------------------------------------------------------
 // Real backend JSON shapes (copy-exact from adminapi Go handler responses)

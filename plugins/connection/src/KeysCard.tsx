@@ -6,7 +6,7 @@ import {
   HttpTransportError,
   buildDsn,
   type ApiKey,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Card,
   CardHeader,
@@ -27,7 +27,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { connectionFromBaseUrl } from "./ConnectionInfoCard"
 import { CopyField, maskDsnCredential, maskSecret } from "./CopyField"
 import { IssueKeyDialog } from "./IssueKeyDialog"

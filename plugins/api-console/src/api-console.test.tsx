@@ -6,7 +6,7 @@ import {
   type FabriqTransport,
   type RawResponse,
   type RawRequestOptions,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { apiConsolePlugin, ApiConsolePage } from "./index"
 
 // ---------------------------------------------------------------------------

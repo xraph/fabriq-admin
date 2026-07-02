@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useFabriqClient, type IssuedKey } from "@fabriq/admin-sdk"
+import { useFabriqClient, type IssuedKey } from "@fabriq-ai/admin-sdk"
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
   Input,
   Label,
   Checkbox,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 
 /**
  * IssueKeyDialog mints a new API key and hands the result back to the parent

@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Settings2, ChevronsUpDown, Monitor, Sun, Moon } from "lucide-react"
 
 export interface NavUserProps {

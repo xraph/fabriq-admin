@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Button } from "@fabriq/ui"
+import { Button } from "@fabriq-ai/ui"
 
 /**
  * Masks the credential (userinfo) of a fabriq DSN so it can be shown without

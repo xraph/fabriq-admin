@@ -43,7 +43,7 @@ import {
   SidebarMenuButton,
   SidebarRail,
   Separator,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import {
   Database,
   LayoutDashboard,

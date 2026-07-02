@@ -1,4 +1,4 @@
-import { useFabriqQuery } from "@fabriq/admin-sdk"
+import { useFabriqQuery } from "@fabriq-ai/admin-sdk"
 
 /**
  * True when the backend advertises the schema.write capability.

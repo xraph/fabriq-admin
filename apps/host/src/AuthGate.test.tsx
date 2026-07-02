@@ -17,7 +17,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent, act } from "@testing-library/react"
 import "@testing-library/jest-dom"
-import { getSessionToken } from "@fabriq/admin-sdk"
+import { getSessionToken } from "@fabriq-ai/admin-sdk"
 import { AuthGate } from "./AuthGate"
 
 function jsonResponse(body: unknown, status = 200) {
@@ -120,7 +120,7 @@ describe("AuthGate", () => {
     // (branch 2, no /meta probe).
     localStorage.setItem("fabriq.session", "stale-token")
 
-    let renderedClient: import("@fabriq/admin-sdk").FabriqClient | undefined
+    let renderedClient: import("@fabriq-ai/admin-sdk").FabriqClient | undefined
     render(
       <AuthGate>
         {(client) => {

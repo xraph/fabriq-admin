@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react"
-import { useFabriqQuery, type EntityField, type EntityRecord } from "@fabriq/admin-sdk"
+import { useFabriqQuery, type EntityField, type EntityRecord } from "@fabriq-ai/admin-sdk"
 import {
   Input,
   Textarea,
@@ -19,7 +19,7 @@ import {
   PopoverTrigger,
   PopoverContent,
   Calendar,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { CalendarIcon } from "lucide-react"
 
 // ---------------------------------------------------------------------------

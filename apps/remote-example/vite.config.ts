@@ -15,7 +15,7 @@ import federation from "@originjs/vite-plugin-federation"
 export default defineConfig({
   resolve: {
     alias: {
-      // @fabriq/ui's source uses the shadcn "@/..." convention for its own
+      // @fabriq-ai/ui's source uses the shadcn "@/..." convention for its own
       // internal imports. Since this app bundles that source directly, the
       // resolver must map "@" to the ui package's src (same as the host).
       "@": fileURLToPath(new URL("../../packages/ui/src", import.meta.url)),
@@ -37,8 +37,8 @@ export default defineConfig({
         // PluginHostContext, theme) share identity across the boundary. Without
         // this the remote bundles its own copy and useFabriqClient throws
         // "must be used within <FabriqProvider>".
-        "@fabriq/admin-sdk": { singleton: true, requiredVersion: false },
-        "@fabriq/ui": { singleton: true, requiredVersion: false },
+        "@fabriq-ai/admin-sdk": { singleton: true, requiredVersion: false },
+        "@fabriq-ai/ui": { singleton: true, requiredVersion: false },
       },
     }),
   ],

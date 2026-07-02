@@ -20,7 +20,7 @@ import {
   Button,
   Input,
   useSidebar,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import { Building2, Check, ChevronsUpDown } from "lucide-react"
 import type { TenantStore } from "./tenant"
 import { useTenant } from "./tenant"

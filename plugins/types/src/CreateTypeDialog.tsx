@@ -2,8 +2,8 @@ import React, { useState } from "react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
   Input, Button, Label, Alert, AlertDescription,
-} from "@fabriq/ui"
-import { useFabriqClient, useQueryClient, usePluginHost, isValidSchemaDefault, type SchemaColumnInput } from "@fabriq/admin-sdk"
+} from "@fabriq-ai/ui"
+import { useFabriqClient, useQueryClient, usePluginHost, isValidSchemaDefault, type SchemaColumnInput } from "@fabriq-ai/admin-sdk"
 import { SchemaFieldEditor } from "./SchemaFieldEditor"
 
 export function CreateTypeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {

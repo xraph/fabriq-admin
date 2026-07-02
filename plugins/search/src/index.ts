@@ -1,4 +1,4 @@
-import { definePlugin } from "@fabriq/admin-sdk"
+import { definePlugin } from "@fabriq-ai/admin-sdk"
 import { SearchPage } from "./SearchPage"
 
 export const searchPlugin = definePlugin({

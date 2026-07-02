@@ -3,7 +3,7 @@ import {
   useFabriqClient,
   HttpTransportError,
   type RawQueryResult,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Button,
   Alert,
@@ -12,7 +12,7 @@ import {
   DataGrid,
   DataGridContainer,
   DataGridTable,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import {
   useReactTable,
   getCoreRowModel,

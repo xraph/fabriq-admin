@@ -8,7 +8,7 @@ import {
   HttpTransportError,
   type FabriqTransport,
   type PluginHostValue,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { livePlugin, LivePage } from "./index"
 
 // ---------------------------------------------------------------------------

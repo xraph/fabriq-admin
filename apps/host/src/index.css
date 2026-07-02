@@ -1,4 +1,4 @@
-@import "@fabriq/ui/styles.css";
+@import "@fabriq-ai/ui/styles.css";
 
 /* v4 skips symlinked node_modules — point at each workspace source dir so their
  * utility classes compile. The plugins-manager and remote-example dirs were

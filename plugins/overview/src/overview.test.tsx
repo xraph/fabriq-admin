@@ -6,7 +6,7 @@ import {
   FabriqAdmin,
   createTenantStore,
   type FabriqTransport,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { overviewPlugin, OverviewPage } from "./index"
 
 // ---------------------------------------------------------------------------

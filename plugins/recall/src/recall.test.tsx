@@ -9,7 +9,7 @@ import {
   type FabriqTransport,
   type PluginHostValue,
   type RecallPack,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import { recallPlugin, RecallPage } from "./index"
 
 // ---------------------------------------------------------------------------

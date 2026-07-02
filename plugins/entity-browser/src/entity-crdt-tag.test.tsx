@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
-import { FabriqClient, FabriqAdmin, type FabriqTransport, type EntityPage } from "@fabriq/admin-sdk"
+import { FabriqClient, FabriqAdmin, type FabriqTransport, type EntityPage } from "@fabriq-ai/admin-sdk"
 import { entityBrowserPlugin } from "./index"
 
 /**

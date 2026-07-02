@@ -6,7 +6,7 @@ import {
   usePluginHost,
   EntityTypeCombobox,
   type EntityRecord,
-} from "@fabriq/admin-sdk"
+} from "@fabriq-ai/admin-sdk"
 import {
   Badge,
   Button,
@@ -22,7 +22,7 @@ import {
   DataGridContainer,
   DataGridTable,
   DataGridColumnHeader,
-} from "@fabriq/ui"
+} from "@fabriq-ai/ui"
 import {
   useReactTable,
   getCoreRowModel,
