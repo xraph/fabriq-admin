@@ -5,6 +5,11 @@ import {
   useQueryClient,
   usePluginHost,
   CapabilityBadges,
+  MergedStateCard,
+  UpdateLogCard,
+  CrdtSpecCard,
+  SegmentsTable,
+  HistoryRangeCard,
 } from "@fabriq/admin-sdk"
 import {
   Button,
@@ -29,6 +34,10 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
 } from "@fabriq/ui"
 import { ArrowLeft, Copy, Check, Pencil, Trash2, Share2 } from "lucide-react"
 import { EntityForm } from "./EntityForm"
@@ -225,6 +234,46 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
     { enabled: Boolean(type), retry: false },
   )
 
+  // isDocument drives the Document tab. isPureDocument (kind === "document")
+  // is the write-action gate: pure KindDocument entities can't be
+  // created/edited/deleted via the command plane (the backend rejects
+  // non-aggregate writes), so they render fully read-only. A CRDT-tagged
+  // *aggregate* stays editable/deletable.
+  const isDocument = caps?.capabilities?.crdt === true
+
+  const { data: crdtEnts } = useFabriqQuery(
+    ["crdt-entities"],
+    (client) => client.getCrdtEntities(),
+    { retry: false },
+  )
+  const crdtInfo = (crdtEnts?.items ?? []).find((e) => e.entity === type)
+  const isPureDocument = crdtInfo?.kind === "document"
+
+  const docId = `${type}/${id}`
+
+  const { data: crdtDoc } = useFabriqQuery(
+    ["crdt", docId],
+    (client) => client.getCrdtDocument(docId),
+    { enabled: isDocument, retry: false },
+  )
+  const { data: crdtUpdates } = useFabriqQuery(
+    ["crdt-updates", docId],
+    (client) => client.getCrdtUpdates(docId),
+    { enabled: isDocument, retry: false },
+  )
+  const { data: crdtSegments } = useFabriqQuery(
+    ["crdt-segments", docId],
+    (client) => client.getCrdtSegments(docId),
+    { enabled: isDocument, retry: false },
+  )
+
+  const [histRange, setHistRange] = useState<{ from: number; to: number } | null>(null)
+  const { data: crdtHistory } = useFabriqQuery(
+    ["crdt-history", docId, histRange?.from, histRange?.to],
+    (client) => client.getCrdtHistory(docId, histRange?.from, histRange?.to),
+    { enabled: isDocument && histRange !== null, retry: false },
+  )
+
   async function handleEdit(nextData: Record<string, unknown>) {
     setSaving(true)
     try {
@@ -312,45 +361,101 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
                 </Button>
                 <CopyButton value={data.id} label="Copy ID" />
                 <CopyButton value={JSON.stringify(data.data, null, 2)} label="Copy JSON" />
-                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} aria-label="Edit">
-                  <Pencil className="h-3 w-3 mr-1" />
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setDeleteOpen(true)}
-                  aria-label="Delete"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  Delete
-                </Button>
+                {/* Documents are never full-row-edited from the admin. */}
+                {!isDocument && (
+                  <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} aria-label="Edit">
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Edit
+                  </Button>
+                )}
+                {/* Pure KindDocument entities can't be deleted — the backend rejects it. */}
+                {!isPureDocument && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setDeleteOpen(true)}
+                    aria-label="Delete"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Delete
+                  </Button>
+                )}
               </div>
             </div>
-            <div className="flex gap-1 mt-3" role="group" aria-label="View mode">
-              <Button
-                variant={view === "fields" ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setView("fields")}
-                aria-label="Fields"
-                aria-pressed={view === "fields"}
-              >
-                Fields
-              </Button>
-              <Button
-                variant={view === "raw" ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setView("raw")}
-                aria-label="Raw JSON"
-                aria-pressed={view === "raw"}
-              >
-                Raw JSON
-              </Button>
-            </div>
+            {!isDocument && (
+              <div className="flex gap-1 mt-3" role="group" aria-label="View mode">
+                <Button
+                  variant={view === "fields" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setView("fields")}
+                  aria-label="Fields"
+                  aria-pressed={view === "fields"}
+                >
+                  Fields
+                </Button>
+                <Button
+                  variant={view === "raw" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setView("raw")}
+                  aria-label="Raw JSON"
+                  aria-pressed={view === "raw"}
+                >
+                  Raw JSON
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
-            {view === "fields" ? <FieldsTable data={data.data} /> : <RawJson data={data.data} />}
+            {isDocument ? (
+              <Tabs defaultValue="document">
+                <TabsList>
+                  <TabsTrigger value="document">Document</TabsTrigger>
+                  <TabsTrigger value="fields">Fields</TabsTrigger>
+                </TabsList>
+                <TabsContent value="document">
+                  <div className="flex flex-col gap-4 mt-3">
+                    {crdtInfo && <CrdtSpecCard info={crdtInfo} />}
+                    {crdtDoc && <MergedStateCard doc={crdtDoc} />}
+                    {crdtUpdates && <UpdateLogCard updates={crdtUpdates} />}
+                    {crdtSegments && <SegmentsTable segments={crdtSegments.items} />}
+                    <HistoryRangeCard
+                      items={crdtHistory?.items ?? []}
+                      onLoad={(from, to) => setHistRange({ from, to })}
+                    />
+                  </div>
+                </TabsContent>
+                <TabsContent value="fields">
+                  <div className="flex flex-col gap-3 mt-3">
+                    <div className="flex gap-1" role="group" aria-label="View mode">
+                      <Button
+                        variant={view === "fields" ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={() => setView("fields")}
+                        aria-label="Fields"
+                        aria-pressed={view === "fields"}
+                      >
+                        Fields
+                      </Button>
+                      <Button
+                        variant={view === "raw" ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={() => setView("raw")}
+                        aria-label="Raw JSON"
+                        aria-pressed={view === "raw"}
+                      >
+                        Raw JSON
+                      </Button>
+                    </div>
+                    {view === "fields" ? <FieldsTable data={data.data} /> : <RawJson data={data.data} />}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            ) : view === "fields" ? (
+              <FieldsTable data={data.data} />
+            ) : (
+              <RawJson data={data.data} />
+            )}
           </CardContent>
         </Card>
       )}
@@ -386,6 +491,7 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
             <DialogDescription>
               This permanently deletes <span className="font-mono">{id}</span>. This
               action cannot be undone.
+              {crdtInfo && " This also purges the entity's offloaded CRDT history."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
