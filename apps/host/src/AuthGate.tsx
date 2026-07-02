@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import {
   FabriqClient,
   connect,
@@ -11,7 +11,30 @@ import {
   type FabriqTransport,
   type TenantStore,
 } from "@fabriq/admin-sdk"
+import { Button } from "@fabriq/ui"
 import { Login } from "./Login"
+
+// ---------------------------------------------------------------------------
+// AuthActionsContext — exposes the gate's logout action to descendants.
+//
+// `canLogout` is true ONLY in the session-token (username/password) auth
+// mode. In DSN mode the client is built from an out-of-band key (nothing to
+// log out of), and in auth-off mode there is no session either — so both
+// leave `logout` a no-op and `canLogout` false, which callers use to hide
+// any logout control entirely.
+// ---------------------------------------------------------------------------
+
+export interface AuthActions {
+  logout: () => void
+  canLogout: boolean
+}
+
+const AuthActionsContext = createContext<AuthActions>({ logout: () => {}, canLogout: false })
+
+/** Reads the current gate's logout action. Defaults to a no-op/`canLogout: false` outside an AuthGate. */
+export function useAuthActions(): AuthActions {
+  return useContext(AuthActionsContext)
+}
 
 // ---------------------------------------------------------------------------
 // Wraps a FabriqTransport so any 401 response — on ANY call, not just the
@@ -66,9 +89,13 @@ function readDsn(): string | undefined {
   return (import.meta.env as Record<string, string | undefined>)["VITE_FABRIQ_DSN"]
 }
 
+// Which branch of the precedence built the current authenticated client.
+// Only "token" has a real session to log out of — see AuthActionsContext.
+type AuthMode = "dsn" | "token" | "keyless"
+
 type GateState =
   | { kind: "loading" }
-  | { kind: "authenticated"; client: FabriqClient }
+  | { kind: "authenticated"; client: FabriqClient; mode: AuthMode }
   | { kind: "login" }
 
 export interface AuthGateProps {
@@ -120,7 +147,7 @@ export function AuthGate({ children, tenantStore }: AuthGateProps) {
     // DSN carries its own key), so never gate behind a login screen.
     const dsn = readDsn()
     if (dsn) {
-      setState({ kind: "authenticated", client: connect(dsn) })
+      setState({ kind: "authenticated", client: connect(dsn), mode: "dsn" })
       return
     }
 
@@ -152,7 +179,7 @@ export function AuthGate({ children, tenantStore }: AuthGateProps) {
     if (token) {
       // 2. Token present — render optimistically; a stale/revoked token
       // surfaces as a 401 on first real call, which flips the gate above.
-      setState({ kind: "authenticated", client: buildClient() })
+      setState({ kind: "authenticated", client: buildClient(), mode: "token" })
       return
     }
 
@@ -180,6 +207,7 @@ export function AuthGate({ children, tenantStore }: AuthGateProps) {
               handleUnauthorized,
             ),
           }),
+          mode: "keyless",
         })
       })
       .catch((err) => {
@@ -200,6 +228,7 @@ export function AuthGate({ children, tenantStore }: AuthGateProps) {
               handleUnauthorized,
             ),
           }),
+          mode: "keyless",
         })
       })
 
@@ -233,12 +262,42 @@ export function AuthGate({ children, tenantStore }: AuthGateProps) {
           },
         ),
       }),
+      mode: "token",
     })
   }
 
   if (state.kind === "loading") return null
   if (state.kind === "login") return <Login onLogin={handleLogin} />
-  return <>{children(state.client)}</>
+
+  const canLogout = state.mode === "token"
+  const authActions: AuthActions = {
+    canLogout,
+    logout: () => {
+      if (!canLogout) return
+      // Fire-and-forget: logout() is best-effort server-side and always
+      // clears the local token; flip back to <Login> immediately rather
+      // than waiting on the network round-trip.
+      void logout(state.client)
+      setState({ kind: "login" })
+    },
+  }
+
+  return (
+    <AuthActionsContext.Provider value={authActions}>
+      {canLogout ? (
+        <div className="relative">
+          <div className="absolute right-4 top-4 z-50">
+            <Button variant="outline" size="sm" onClick={authActions.logout}>
+              Log out
+            </Button>
+          </div>
+          {children(state.client)}
+        </div>
+      ) : (
+        children(state.client)
+      )}
+    </AuthActionsContext.Provider>
+  )
 }
 
 /**

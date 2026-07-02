@@ -7,6 +7,12 @@
  *   3. keyless /meta probe 401      → <Login> is shown.
  *   4. successful login             → token stored, children shown.
  *   5. a later 401 on any call      → token cleared, back to <Login>.
+ *
+ * Plus the visible logout control (session-token mode only):
+ *   6. session-token mode           → "Log out" is present; clicking it
+ *                                      clears the token and returns to
+ *                                      <Login>.
+ *   7. auth-off (keyless /meta 200) → no "Log out" control is rendered.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent, act } from "@testing-library/react"
@@ -152,5 +158,49 @@ describe("AuthGate", () => {
     expect(screen.queryByRole("button", { name: /sign in/i })).not.toBeInTheDocument()
     // No probe was ever needed for the DSN branch.
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it("session-token mode shows Log out; clicking it clears the token and returns to <Login>", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.endsWith("/logout")) return jsonResponse({})
+        throw new Error(`unexpected fetch: ${url}`)
+      }),
+    )
+
+    // A token is already stored — AuthGate renders children optimistically
+    // (branch 2, session-token mode) without ever probing /meta.
+    localStorage.setItem("fabriq.session", "tok-abc")
+
+    render(<AuthGate>{() => <div>console-children</div>}</AuthGate>)
+
+    expect(await screen.findByText("console-children")).toBeInTheDocument()
+    const logoutButton = screen.getByRole("button", { name: /log out/i })
+    expect(logoutButton).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(logoutButton)
+    })
+
+    expect(await screen.findByRole("button", { name: /sign in/i })).toBeInTheDocument()
+    expect(getSessionToken()).toBeNull()
+  })
+
+  it("auth-off mode (keyless /meta 200) does not render a Log out control", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.endsWith("/meta")) return jsonResponse(META)
+        throw new Error(`unexpected fetch: ${url}`)
+      }),
+    )
+
+    render(<AuthGate>{() => <div>console-children</div>}</AuthGate>)
+
+    expect(await screen.findByText("console-children")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /log out/i })).not.toBeInTheDocument()
   })
 })
