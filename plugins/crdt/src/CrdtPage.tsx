@@ -4,6 +4,8 @@ import {
   HttpTransportError,
   MergedStateCard,
   UpdateLogCard,
+  SegmentsTable,
+  HistoryRangeCard,
   type CrdtDocument,
   type CrdtUpdates,
 } from "@fabriq/admin-sdk"
@@ -60,6 +62,18 @@ export function CrdtPage() {
     ["crdt-updates", docId],
     (c) => c.getCrdtUpdates(docId),
     { enabled: !!docId, retry: false },
+  )
+  const segmentsQuery = useFabriqQuery(
+    ["crdt-segments", docId],
+    (c) => c.getCrdtSegments(docId),
+    { enabled: !!docId, retry: false },
+  )
+
+  const [histRange, setHistRange] = useState<{ from: number; to: number } | null>(null)
+  const historyQuery = useFabriqQuery(
+    ["crdt-history", docId, histRange?.from, histRange?.to],
+    (c) => c.getCrdtHistory(docId, histRange?.from, histRange?.to),
+    { enabled: !!docId && histRange !== null, retry: false },
   )
 
   function handleLoad() {
@@ -154,6 +168,15 @@ export function CrdtPage() {
               )}
               {updatesQuery.data && !updatesQuery.isError && (
                 <UpdateLogCard updates={updatesQuery.data} />
+              )}
+              {docId && segmentsQuery.data && (
+                <SegmentsTable segments={segmentsQuery.data.items ?? []} />
+              )}
+              {docId && (
+                <HistoryRangeCard
+                  items={historyQuery.data?.items ?? []}
+                  onLoad={(from, to) => setHistRange({ from, to })}
+                />
               )}
             </>
           )}

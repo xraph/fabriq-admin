@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react"
 import {
   FabriqClient,
   FabriqAdmin,
@@ -114,10 +114,15 @@ describe("CrdtPage — load", () => {
     renderCrdt(client)
     await waitFor(() => expect(request.mock.calls.length).toBeGreaterThanOrEqual(2))
 
-    fireEvent.change(screen.getByLabelText("Document id"), {
+    const docIdInput = screen.getByLabelText("Document id")
+    fireEvent.change(docIdInput, {
       target: { value: "notes/todo" },
     })
-    fireEvent.click(screen.getByRole("button", { name: /load/i }))
+    // Scope to the "Document" form's submit button — the History range card
+    // below also renders a button labeled "Load".
+    const form = docIdInput.closest("form")
+    if (!form) throw new Error("expected the document-id input to be inside a form")
+    fireEvent.click(within(form).getByRole("button", { name: /load/i }))
 
     await waitFor(() =>
       expect(
@@ -141,6 +146,24 @@ describe("CrdtPage — 501 not configured", () => {
     await screen.findByText(/not configured/i)
     // No destructive error alert.
     expect(screen.queryByText(/Failed to load document/i)).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4. Segments + history render for a loaded document
+// ---------------------------------------------------------------------------
+
+describe("CrdtPage — segments + history", () => {
+  it("renders segments + history for a loaded document", async () => {
+    const { client } = makeClient((opts) => {
+      if (opts.path.endsWith("/updates")) return { items: [], highWaterSeq: 0 }
+      if (opts.path.endsWith("/segments")) return { docId: "page/welcome", items: [{ segSeq: 1, seqLo: 1, seqHi: 64, updateCount: 64, byteSize: 8192, at: "1970-01-01T00:00:00Z" }] }
+      if (opts.path.endsWith("/history")) return { docId: "page/welcome", items: [] }
+      if (opts.path.includes("/crdt/")) return { docId: "page/welcome", version: 1, snapshot: {} }
+      return {}
+    })
+    renderCrdt(client)
+    await screen.findByText("1–64") // segment range from SegmentsTable
   })
 })
 
