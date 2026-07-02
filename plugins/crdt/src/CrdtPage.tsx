@@ -2,6 +2,8 @@ import { useState } from "react"
 import {
   useFabriqQuery,
   HttpTransportError,
+  MergedStateCard,
+  UpdateLogCard,
   type CrdtDocument,
   type CrdtUpdates,
 } from "@fabriq/admin-sdk"
@@ -11,19 +13,11 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-  Badge,
   Button,
   Input,
   Alert,
   AlertDescription,
   Skeleton,
-  Table,
-  TableHeader,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableCaption,
 } from "@fabriq/ui"
 import { FileText, Play } from "lucide-react"
 
@@ -32,34 +26,6 @@ import { FileText, Play } from "lucide-react"
 // ---------------------------------------------------------------------------
 
 const DEFAULT_DOC_ID = "page/welcome"
-
-function humanizeSize(bytes?: number): string {
-  if (bytes === undefined || bytes === null) return ""
-  if (bytes < 1024) return `${bytes} B`
-  const units = ["KB", "MB", "GB", "TB"]
-  let value = bytes / 1024
-  let i = 0
-  while (value >= 1024 && i < units.length - 1) {
-    value /= 1024
-    i++
-  }
-  return `${value.toFixed(1)} ${units[i]}`
-}
-
-/** Pretty-print an arbitrary JSON value; never throws. */
-function prettyJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2) ?? String(value)
-  } catch {
-    return String(value)
-  }
-}
-
-/** Truncate a base64 preview string for compact display. */
-function truncate(text: string | undefined, max = 48): string {
-  if (!text) return ""
-  return text.length > max ? `${text.slice(0, max)}…` : text
-}
 
 /**
  * Detects the "document / CRDT plane not configured" condition. The backend
@@ -194,96 +160,6 @@ export function CrdtPage() {
         </>
       )}
     </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// MergedStateCard
-// ---------------------------------------------------------------------------
-
-function MergedStateCard({ doc }: { doc: CrdtDocument }) {
-  const snapshot = doc.snapshot
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          Merged state
-          <Badge variant="secondary" className="font-mono">
-            v{doc.version ?? 0}
-          </Badge>
-        </CardTitle>
-        <CardDescription>
-          Current merged value of{" "}
-          <code className="font-mono">{doc.docId}</code>, replayed from the
-          update log.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {snapshot === undefined ||
-        snapshot === null ||
-        (typeof snapshot === "object" && Object.keys(snapshot).length === 0) ? (
-          <p className="text-sm text-muted-foreground">
-            This document is empty.
-          </p>
-        ) : (
-          <pre className="rounded-md border bg-muted p-4 text-sm overflow-auto max-h-[50vh]">
-            {prettyJson(snapshot)}
-          </pre>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// UpdateLogCard
-// ---------------------------------------------------------------------------
-
-function UpdateLogCard({ updates }: { updates: CrdtUpdates }) {
-  const items = updates.items ?? []
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">
-          Update log <Badge variant="secondary">{items.length}</Badge>
-        </CardTitle>
-        <CardDescription>
-          Metadata for each CRDT update applied to this document.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No updates recorded.</p>
-        ) : (
-          <Table>
-            <TableCaption>
-              High-water sequence:{" "}
-              <span className="font-mono">{updates.highWaterSeq ?? 0}</span>
-            </TableCaption>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-20">Index</TableHead>
-                <TableHead className="w-28">Size</TableHead>
-                <TableHead>Preview</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((u) => (
-                <TableRow key={u.index}>
-                  <TableCell className="font-mono">{u.index}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {humanizeSize(u.size)}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {truncate(u.preview)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
   )
 }
 

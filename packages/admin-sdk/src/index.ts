@@ -65,3 +65,8 @@ export type { ConfirmOptions, ConfirmFn } from "./confirm"
 export { parseDsn, dsnBaseUrl } from "./dsn"
 export type { ParsedDsn } from "./dsn"
 export { connect } from "./connect"
+
+export {
+	MergedStateCard, UpdateLogCard, CrdtSpecCard, SegmentsTable, HistoryRangeCard,
+	prettyJson, humanizeSize, truncate,
+} from "./crdtComponents"
