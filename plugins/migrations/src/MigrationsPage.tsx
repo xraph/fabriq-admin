@@ -360,7 +360,7 @@ function ScaffoldDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-[95vw] max-w-6xl">
         <DialogHeader>
           <DialogTitle>Scaffold a migration</DialogTitle>
           <DialogDescription>
