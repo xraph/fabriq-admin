@@ -1,5 +1,6 @@
-import { getSessionToken, type FabriqClient } from "@fabriq/admin-sdk"
+import { getSessionToken, buildDsn, type FabriqClient } from "@fabriq/admin-sdk"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Badge } from "@fabriq/ui"
+import { CopyField, maskDsnCredential } from "./CopyField"
 
 /** Parse an HTTP base URL (e.g. http://localhost:8080/admin) into DSN parts. */
 export function connectionFromBaseUrl(baseUrl: string): {
@@ -15,10 +16,60 @@ export function connectionFromBaseUrl(baseUrl: string): {
   return { host: u.hostname, port, tls, basePath }
 }
 
-function authMode(): "dsn" | "session" | "none" {
+function readEnvDsn(): string | undefined {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
-  if (env?.["VITE_FABRIQ_DSN"]) return "dsn"
+  return env?.["VITE_FABRIQ_DSN"]
+}
+
+function authMode(): "dsn" | "session" | "none" {
+  if (readEnvDsn()) return "dsn"
   return getSessionToken() ? "session" : "none"
+}
+
+/**
+ * A ready-to-use connection string for the current session, plus a masked form
+ * and whether it embeds a live credential. Covers every connection mode:
+ *
+ *   - dsn     → the configured VITE_FABRIQ_DSN verbatim (already carries a key).
+ *   - session → a fabriq:// DSN embedding the current session token as the key,
+ *               scoped to the active tenant when one is selected.
+ *   - none    → auth is off; there is no credential, so the connection string
+ *               is just the HTTP base URL (requests are scoped by X-Tenant-ID).
+ */
+export function connectionString(
+  client: FabriqClient,
+  tenant: string | null,
+): { value: string; masked?: string; secret: boolean; note?: string } {
+  const c = connectionFromBaseUrl(client.baseUrl)
+
+  const envDsn = readEnvDsn()
+  if (envDsn) {
+    return { value: envDsn, masked: maskDsnCredential(envDsn), secret: true }
+  }
+
+  const token = getSessionToken()
+  if (token) {
+    const dsn = buildDsn({
+      key: token,
+      host: c.host,
+      port: c.port,
+      tls: c.tls,
+      tenant: tenant || undefined,
+      basePath: c.basePath,
+    })
+    return {
+      value: dsn,
+      masked: maskDsnCredential(dsn),
+      secret: true,
+      note: "Embeds your current session token (expires ~12h). Issue a long-lived API key below for durable, revocable access.",
+    }
+  }
+
+  return {
+    value: client.baseUrl,
+    secret: false,
+    note: "Auth is disabled on this backend, so no credential is embedded. Requests are scoped by the X-Tenant-ID header.",
+  }
 }
 
 export function ConnectionInfoCard({
@@ -30,6 +81,7 @@ export function ConnectionInfoCard({
 }) {
   const c = connectionFromBaseUrl(client.baseUrl)
   const mode = authMode()
+  const cs = connectionString(client, tenant)
   return (
     <Card>
       <CardHeader>
@@ -53,6 +105,15 @@ export function ConnectionInfoCard({
             <Badge variant="secondary">{mode}</Badge>
           </dd>
         </dl>
+
+        <div className="mt-4 space-y-2 border-t pt-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Connection string</span>
+            <Badge variant="outline">{cs.secret ? "includes credential" : "no credential"}</Badge>
+          </div>
+          <CopyField value={cs.value} masked={cs.masked} />
+          {cs.note ? <p className="text-xs text-muted-foreground">{cs.note}</p> : null}
+        </div>
       </CardContent>
     </Card>
   )

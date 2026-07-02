@@ -29,6 +29,7 @@ import {
   DialogFooter,
 } from "@fabriq/ui"
 import { connectionFromBaseUrl } from "./ConnectionInfoCard"
+import { CopyField, maskDsnCredential, maskSecret } from "./CopyField"
 import { IssueKeyDialog } from "./IssueKeyDialog"
 
 /** A 404/401 from GET /keys means the backend runs without auth (no key store). */
@@ -174,13 +175,15 @@ export function KeysCard({ tenant }: { tenant: string | null }) {
       />
 
       {revealed && (
-        <div className="mx-6 mb-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+        <div className="mx-6 mb-4 space-y-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
           <p className="font-medium">Copy your key now — it won&apos;t be shown again.</p>
-          <p className="mt-2 text-muted-foreground">Key</p>
-          <pre className="rounded bg-muted p-2 overflow-auto">{revealed.key}</pre>
-          <p className="mt-2 text-muted-foreground">Connection string (DSN)</p>
-          <pre className="rounded bg-muted p-2 overflow-auto">{revealed.dsn}</pre>
-          <Button variant="outline" size="sm" className="mt-2" onClick={() => setRevealed(null)}>
+          <CopyField label="Key" value={revealed.key} masked={maskSecret(revealed.key)} />
+          <CopyField
+            label="Connection string (DSN)"
+            value={revealed.dsn}
+            masked={maskDsnCredential(revealed.dsn)}
+          />
+          <Button variant="outline" size="sm" onClick={() => setRevealed(null)}>
             Dismiss
           </Button>
         </div>

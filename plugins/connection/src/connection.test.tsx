@@ -1,6 +1,13 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
-import { FabriqClient, FabriqAdmin, HttpTransportError, type FabriqTransport } from "@fabriq/admin-sdk"
+import {
+  FabriqClient,
+  FabriqAdmin,
+  HttpTransportError,
+  setSessionToken,
+  clearSessionToken,
+  type FabriqTransport,
+} from "@fabriq/admin-sdk"
 import { connectionPlugin } from "./index"
 
 function makeClient(handler: (o: any) => unknown) {
@@ -18,6 +25,8 @@ function makeClient(handler: (o: any) => unknown) {
   return new FabriqClient({ baseUrl: "http://localhost:8080/admin", transport })
 }
 
+afterEach(() => clearSessionToken())
+
 describe("connection plugin", () => {
   it("shows connection info derived from the client base URL", async () => {
     const client = makeClient((o) => {
@@ -34,6 +43,50 @@ describe("connection plugin", () => {
     )
     await waitFor(() => expect(screen.getByText("localhost:8080")).toBeTruthy())
     expect(screen.getByText("/admin")).toBeTruthy()
+  })
+
+  it("shows a keyless connection string (base URL, no credential) when auth is off", async () => {
+    const client = makeClient((o) => {
+      if ((o.path as string).endsWith("/keys")) return { keys: [] }
+      return {}
+    })
+    render(
+      <FabriqAdmin
+        client={client}
+        plugins={[connectionPlugin]}
+        loadRemote={vi.fn()}
+        initialPath="connection"
+      />,
+    )
+    await waitFor(() => expect(screen.getByText("no credential")).toBeTruthy())
+    // Base URL is the connection string (shown in the CopyField <pre>); there
+    // is nothing to reveal.
+    expect(document.querySelector("pre")?.textContent).toBe("http://localhost:8080/admin")
+    expect(screen.queryByRole("button", { name: /^reveal$/i })).toBeNull()
+  })
+
+  it("generates a masked, copyable connection string embedding the session token", async () => {
+    setSessionToken("fq_SESSION123")
+    const client = makeClient((o) => {
+      if ((o.path as string).endsWith("/keys")) return { keys: [] }
+      return {}
+    })
+    render(
+      <FabriqAdmin
+        client={client}
+        plugins={[connectionPlugin]}
+        loadRemote={vi.fn()}
+        initialPath="connection"
+      />,
+    )
+    // Masked by default with an "includes credential" badge — the token is not
+    // visible on screen until revealed.
+    await waitFor(() => expect(screen.getByText("includes credential")).toBeTruthy())
+    expect(screen.getByText(/^fabriq:\/\/••••••••@localhost:8080/)).toBeTruthy()
+    expect(screen.queryByText(/fq_SESSION123/)).toBeNull()
+    // Reveal exposes the DSN with the embedded session token.
+    fireEvent.click(screen.getByRole("button", { name: /^reveal$/i }))
+    expect(screen.getByText(/^fabriq:\/\/fq_SESSION123@localhost:8080/)).toBeTruthy()
   })
 
   it("lists existing API keys", async () => {
@@ -84,7 +137,7 @@ describe("connection plugin", () => {
     expect(screen.getByText("localhost:8080")).toBeTruthy()
   })
 
-  it("issues a key and reveals the key + a fabriq:// DSN once", async () => {
+  it("issues a key and reveals the key + a fabriq:// DSN (masked, then revealable)", async () => {
     const client = makeClient((o) => {
       const p = o.path as string
       if (p.endsWith("/keys") && o.method === "GET") return { keys: [] }
@@ -105,9 +158,12 @@ describe("connection plugin", () => {
     fireEvent.click(screen.getByRole("button", { name: /issue key/i }))
     fireEvent.change(screen.getByLabelText(/label/i), { target: { value: "cli" } })
     fireEvent.click(screen.getByRole("button", { name: /^create$/i }))
-    // Full key + assembled DSN revealed once (exact key string matches only the
-    // key <pre>; the DSN <pre> is matched by its own anchored pattern).
-    await waitFor(() => expect(screen.getByText("fq_z9SECRETVALUE")).toBeTruthy())
+    // Key + DSN revealed once, masked by default.
+    await waitFor(() => expect(screen.getByText("fq_z9S…")).toBeTruthy())
+    expect(screen.getByText(/^fabriq:\/\/••••••••@localhost:8080/)).toBeTruthy()
+    // Revealing both fields exposes the real key and full DSN.
+    screen.getAllByRole("button", { name: /^reveal$/i }).forEach((b) => fireEvent.click(b))
+    expect(screen.getByText("fq_z9SECRETVALUE")).toBeTruthy()
     expect(screen.getByText(/^fabriq:\/\/fq_z9SECRETVALUE@localhost:8080/)).toBeTruthy()
   })
 })
