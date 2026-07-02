@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
-import { FabriqClient, FabriqAdmin, type FabriqTransport } from "@fabriq/admin-sdk"
+import {
+  FabriqClient,
+  FabriqAdmin,
+  QueryClient,
+  HttpTransportError,
+  type FabriqTransport,
+} from "@fabriq/admin-sdk"
 import { entityBrowserPlugin } from "./index"
 
 function makeClient(handler: (opts: any) => unknown) {
@@ -131,5 +137,55 @@ describe("EntityDetail document tab", () => {
     // isPureDocument (kind === "document") is the delete gate; this is an
     // aggregate, so Delete stays available.
     await waitFor(() => expect(screen.queryByRole("button", { name: /^delete$/i })).toBeTruthy())
+  })
+
+  it("renders the Document view for a document with NO materialized relational row (getEntity 404)", async () => {
+    // Documents live in the CRDT plane; the relational row is an async
+    // materialized projection that often does not exist. getEntity then 404s.
+    // The detail must still render from CRDT data — not get stuck on the
+    // relational-row loading skeleton, and not show the generic error card.
+    const client = makeClient((opts: any) => {
+      const p = opts.path as string
+      if (p.endsWith("/capabilities") && opts.query?.type === "page") {
+        return { type: "page", capabilities: { crdt: true, relational: true } }
+      }
+      if (p.endsWith("/crdt/entities")) {
+        return {
+          items: [
+            {
+              entity: "page",
+              kind: "document",
+              engine: "grove-crdt",
+              snapshotEvery: 64,
+              quietWindowMs: 2000,
+              archiveHistory: true,
+            },
+          ],
+        }
+      }
+      if (p.includes("/crdt/") && p.endsWith("/updates")) return { items: [], highWaterSeq: 0 }
+      if (p.includes("/crdt/") && p.endsWith("/segments")) return { docId: "page/welcome", items: [] }
+      if (p.includes("/crdt/") && p.endsWith("/history")) return { docId: "page/welcome", items: [] }
+      if (p.includes("/crdt/")) return { docId: "page/welcome", version: 3, snapshot: { title: "Hi" } }
+      // No materialized relational row for this document.
+      if (p.includes("/entities/")) throw new HttpTransportError(404, "entity not found")
+      return {}
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <FabriqAdmin
+        client={client}
+        plugins={[entityBrowserPlugin]}
+        loadRemote={vi.fn()}
+        initialPath="entities/page/welcome"
+        queryClient={qc}
+      />,
+    )
+    // Document view renders from CRDT data despite the missing relational row.
+    await waitFor(() => expect(screen.getByText("v3")).toBeTruthy())
+    expect(screen.getByRole("tab", { name: /document/i })).toBeTruthy()
+    // Not stuck on the loading skeleton, and not the generic error card.
+    expect(screen.queryByRole("status", { name: /loading/i })).toBeNull()
+    expect(screen.queryByText(/failed to load entity/i)).toBeNull()
   })
 })

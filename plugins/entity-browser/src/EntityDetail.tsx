@@ -228,7 +228,7 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
 
   // Per-type capabilities — which subsystems THIS entity type participates in.
   // Enhancement only: degrade quietly if the backend doesn't support it.
-  const { data: caps } = useFabriqQuery(
+  const { data: caps, isFetched: capsFetched } = useFabriqQuery(
     ["entity-caps", type],
     (client) => client.getEntityCapabilities(type),
     { enabled: Boolean(type), retry: false },
@@ -296,7 +296,12 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
     }
   }
 
-  if (isLoading) {
+  // Document entities are driven by the CRDT plane; their relational row is an
+  // OPTIONAL async-materialized projection that often does not exist. Only gate
+  // the whole detail on the relational getEntity query for NON-document
+  // entities. Wait for the capability probe to settle first so we know the kind
+  // before deciding whether the relational row is required.
+  if (!capsFetched || (!isDocument && isLoading)) {
     return (
       <Card>
         <CardHeader>
@@ -316,7 +321,7 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
     )
   }
 
-  if (isError) {
+  if (!isDocument && isError) {
     return (
       <div className="space-y-4">
         <Button variant="ghost" onClick={() => navigate("entities")} aria-label="Back">
@@ -343,13 +348,13 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
         <span className="font-mono text-foreground truncate max-w-xs" title={id}>{id}</span>
       </nav>
 
-      {data && (
+      {(data || isDocument) && (
         <Card>
           <CardHeader>
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-3 flex-wrap">
-                <CardTitle className="font-mono text-lg">{data.id}</CardTitle>
-                <Badge variant="secondary">{data.type}</Badge>
+                <CardTitle className="font-mono text-lg">{data?.id ?? id}</CardTitle>
+                <Badge variant="secondary">{data?.type ?? type}</Badge>
                 {caps?.capabilities && (
                   <CapabilityBadges capabilities={caps.capabilities} />
                 )}
@@ -359,8 +364,8 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
                   <ArrowLeft className="h-4 w-4 mr-1" />
                   Back
                 </Button>
-                <CopyButton value={data.id} label="Copy ID" />
-                <CopyButton value={JSON.stringify(data.data, null, 2)} label="Copy JSON" />
+                <CopyButton value={data?.id ?? id} label="Copy ID" />
+                {data && <CopyButton value={JSON.stringify(data.data, null, 2)} label="Copy JSON" />}
                 {/* Documents are never full-row-edited from the admin. */}
                 {!isDocument && (
                   <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} aria-label="Edit">
@@ -447,14 +452,20 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
                         Raw JSON
                       </Button>
                     </div>
-                    {view === "fields" ? <FieldsTable data={data.data} /> : <RawJson data={data.data} />}
+                    {data ? (
+                      view === "fields" ? <FieldsTable data={data.data} /> : <RawJson data={data.data} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        This document has not been materialized to a relational row yet.
+                      </p>
+                    )}
                   </div>
                 </TabsContent>
               </Tabs>
             ) : view === "fields" ? (
-              <FieldsTable data={data.data} />
+              <FieldsTable data={data?.data ?? {}} />
             ) : (
-              <RawJson data={data.data} />
+              <RawJson data={data?.data ?? {}} />
             )}
           </CardContent>
         </Card>
