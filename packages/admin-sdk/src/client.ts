@@ -621,6 +621,34 @@ export interface CrdtUpdates {
   highWaterSeq: number
 }
 
+/** A registered CRDT/document entity plus its spec (for tags + spec display). */
+export interface CrdtEntityInfo {
+  entity: string
+  kind: string
+  engine: string
+  snapshotEvery: number
+  quietWindowMs: number
+  /** Per-entity ArchiveHistory override; null = inherit the global default. */
+  archiveHistory: boolean | null
+}
+
+/** One sealed history segment's metadata. */
+export interface CrdtSegment {
+  segSeq: number
+  seqLo: number
+  seqHi: number
+  updateCount: number
+  byteSize: number
+  at: string
+}
+
+/** One raw update from a document's offloaded history, keyed by seq. */
+export interface CrdtHistoryUpdate {
+  seq: number
+  size: number
+  preview?: string
+}
+
 // ---------------------------------------------------------------------------
 // Distillation (DigestNode Merkle tree) types
 // ---------------------------------------------------------------------------
@@ -1524,6 +1552,38 @@ export class FabriqClient {
       method: "GET",
       path: `${this.baseUrl}/crdt/${encodeDocId(docId)}/updates`,
       ...(query ? { query } : {}),
+    })
+  }
+
+  /** GET /crdt/entities — registered CRDT/document entities + their spec. */
+  getCrdtEntities(): Promise<{ items: CrdtEntityInfo[] }> {
+    return this.transport.request<{ items: CrdtEntityInfo[] }>({
+      method: "GET",
+      path: `${this.baseUrl}/crdt/entities`,
+    })
+  }
+
+  /** GET /crdt/:docId/segments — sealed history segments for a document. */
+  getCrdtSegments(docId: string): Promise<{ docId: string; items: CrdtSegment[] }> {
+    return this.transport.request<{ docId: string; items: CrdtSegment[] }>({
+      method: "GET",
+      path: `${this.baseUrl}/crdt/${encodeDocId(docId)}/segments`,
+    })
+  }
+
+  /** GET /crdt/:docId/history?from=&to= — raw update range (segments + log). */
+  getCrdtHistory(
+    docId: string,
+    from?: number,
+    to?: number,
+  ): Promise<{ docId: string; items: CrdtHistoryUpdate[] }> {
+    const query: Record<string, number> = {}
+    if (from !== undefined) query.from = from
+    if (to !== undefined) query.to = to
+    return this.transport.request<{ docId: string; items: CrdtHistoryUpdate[] }>({
+      method: "GET",
+      path: `${this.baseUrl}/crdt/${encodeDocId(docId)}/history`,
+      ...(Object.keys(query).length ? { query } : {}),
     })
   }
 
