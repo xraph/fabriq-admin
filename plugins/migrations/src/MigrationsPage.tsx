@@ -264,8 +264,8 @@ function DriftTab() {
                 </td>
               ) : (
                 <>
-                  <td className="p-2 font-mono text-destructive">{e.missing.join(", ") || "—"}</td>
-                  <td className="p-2 font-mono text-muted-foreground">{e.extra.join(", ") || "—"}</td>
+                  <td className="p-2 font-mono text-destructive">{(e.missing ?? []).join(", ") || "—"}</td>
+                  <td className="p-2 font-mono text-muted-foreground">{(e.extra ?? []).join(", ") || "—"}</td>
                 </>
               )}
             </tr>

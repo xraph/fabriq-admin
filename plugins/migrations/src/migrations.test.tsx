@@ -45,6 +45,9 @@ function makeClient(caps: string[], opts?: { ddlError?: boolean }) {
       return {
         entities: [
           { entity: "product", table: "ds_products", dynamic: true, inSync: false, missing: ["price"], extra: [] },
+          // An in-sync entity: a Go nil []string marshals to null on the wire — the
+          // UI must not call .join() on it (regression: "null is not an object").
+          { entity: "widget", table: "ds_widgets", dynamic: true, inSync: true, missing: null, extra: null },
           { entity: "broken", table: "ds_broken", dynamic: true, inSync: false, missing: [], extra: [], error: "relation \"ds_broken\" does not exist" },
         ],
       }
@@ -94,6 +97,9 @@ describe("MigrationsPage", () => {
     expect(screen.getByText("ds_products")).toBeTruthy()
     expect(screen.getAllByText("drift").length).toBeGreaterThan(0) // inSync:false badge
     expect(screen.getByText("price")).toBeTruthy() // missing column
+    // In-sync entity whose missing/extra came back as null must still render.
+    expect(screen.getByText("widget")).toBeTruthy()
+    expect(screen.getByText("in sync")).toBeTruthy()
   })
 
   it("Drift tab surfaces a per-entity introspection error", async () => {
