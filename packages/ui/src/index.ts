@@ -135,6 +135,7 @@ export { DataGridColumnHeader } from "./components/reui/data-grid/data-grid-colu
 export { Label } from "./components/ui/label"
 export { Textarea } from "./components/ui/textarea"
 export { Calendar } from "./components/ui/calendar"
+export { Checkbox } from "./components/ui/checkbox"
 
 // Alert dialog (Base UI)
 export {

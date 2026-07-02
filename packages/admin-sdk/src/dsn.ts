@@ -101,6 +101,29 @@ export function dsnBaseUrl(d: ParsedDsn): string {
   return `${scheme}://${d.host}:${d.port}${d.basePath}`
 }
 
+/**
+ * buildDsn is the inverse of parseDsn: it renders connection parts as a
+ * `fabriq://<key>@host:port[/tenant]?tls=…[&version=N][&basePath=/x]` string.
+ * The port is always emitted; version is emitted only when != 1 and basePath
+ * only when != "/admin", so `parseDsn(buildDsn(x))` round-trips.
+ */
+export function buildDsn(parts: {
+  key: string
+  host: string
+  port: number
+  tls: boolean
+  tenant?: string
+  version?: number
+  basePath?: string
+}): string {
+  const q = new URLSearchParams()
+  q.set("tls", String(parts.tls))
+  if (parts.version !== undefined && parts.version !== 1) q.set("version", String(parts.version))
+  if (parts.basePath !== undefined && parts.basePath !== "/admin") q.set("basePath", parts.basePath)
+  const tenantPart = parts.tenant ? `/${parts.tenant}` : ""
+  return `fabriq://${parts.key}@${parts.host}:${parts.port}${tenantPart}?${q.toString()}`
+}
+
 function trimLeadingSlash(s: string): string {
   return s.startsWith("/") ? s.slice(1) : s
 }

@@ -331,6 +331,24 @@ export interface PluginRecord {
 /** PluginRecord without the server-assigned id — used for creation. */
 export type NewPluginRecord = Omit<PluginRecord, "id">
 
+/** A freshly issued API key. `key` is the plaintext bearer token, returned once. */
+export interface IssuedKey {
+  id: string
+  prefix: string
+  key: string
+}
+
+/** A stored API key as seen on read paths (structurally redacted — no secret). */
+export interface ApiKey {
+  id: string
+  prefix: string
+  label: string
+  tenantId?: string
+  canManageKeys: boolean
+  createdAt: string
+  revokedAt?: string
+}
+
 /**
  * Capability flags reported by the backend — which fabriq subsystems are
  * available for an instance, or which a given entity type participates in.
@@ -764,7 +782,7 @@ export interface FabriqClientOptions {
 }
 
 export class FabriqClient {
-  private readonly baseUrl: string
+  readonly baseUrl: string
   private readonly transport: FabriqTransport
 
   constructor({ baseUrl, transport }: FabriqClientOptions) {
@@ -1682,6 +1700,35 @@ export class FabriqClient {
     return this.transport.request({
       method: "DELETE",
       path: `${this.baseUrl}/plugins/${encodeURIComponent(id)}`,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // API keys
+  // -------------------------------------------------------------------------
+
+  /** POST /keys — issue a new API key. Returns the plaintext key ONCE. */
+  issueKey(input: { label: string; tenantId?: string; canManageKeys?: boolean }): Promise<IssuedKey> {
+    return this.transport.request<IssuedKey>({
+      method: "POST",
+      path: `${this.baseUrl}/keys`,
+      body: input,
+    })
+  }
+
+  /** GET /keys — list stored API keys (prefix/label/metadata only, no secret). */
+  listKeys(): Promise<{ keys: ApiKey[] }> {
+    return this.transport.request<{ keys: ApiKey[] }>({
+      method: "GET",
+      path: `${this.baseUrl}/keys`,
+    })
+  }
+
+  /** DELETE /keys/:id — revoke an API key. */
+  revokeKey(id: string): Promise<{ revoked: boolean }> {
+    return this.transport.request<{ revoked: boolean }>({
+      method: "DELETE",
+      path: `${this.baseUrl}/keys/${encodeURIComponent(id)}`,
     })
   }
 
