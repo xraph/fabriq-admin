@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react"
 import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, Input, Label, Alert, AlertDescription } from "@fabriq/ui"
+import { useResolvedTheme } from "@fabriq/admin-sdk"
 
 export interface LoginProps {
   /**
@@ -22,6 +23,11 @@ export function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // Login renders OUTSIDE <FabriqAdmin>, so it must establish the
+  // `.fabriq-admin` scope itself — the ui package's Tailwind tokens and base
+  // styles are all scoped to that class (no global preflight). Without it the
+  // inputs/card/button render unstyled. Mirror FabriqAdmin's theme attribute.
+  const { resolved } = useResolvedTheme("system")
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -37,7 +43,10 @@ export function Login({ onLogin }: LoginProps) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div
+      className="fabriq-admin flex min-h-screen items-center justify-center bg-background p-4"
+      data-fabriq-theme={resolved}
+    >
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Sign in</CardTitle>

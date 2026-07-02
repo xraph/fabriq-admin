@@ -57,6 +57,9 @@ export {
 export type { RouterAdapter, PathAdapterOptions, RouterBridge } from "./routerAdapters"
 export type { RoutingStrategy } from "./FabriqAdmin"
 
+export { useResolvedTheme } from "./theme"
+export type { ResolvedTheme, ThemeProp, UseResolvedThemeResult } from "./theme"
+
 export { EntityTypeCombobox } from "./EntityTypeCombobox"
 export type { EntityTypeComboboxProps } from "./EntityTypeCombobox"
 export { SuggestCombobox } from "./SuggestCombobox"
