@@ -1,6 +1,7 @@
 import {
   FabriqAdmin,
   FabriqClient,
+  connect,
   createHttpTransport,
   createTenantStore,
   loadRemotePlugin,
@@ -50,12 +51,21 @@ const baseUrl: string =
   (import.meta.env as Record<string, string | undefined>)["VITE_FABRIQ_API_URL"] ??
   "http://localhost:8080/admin"
 
+const dsn = (import.meta.env as Record<string, string | undefined>)["VITE_FABRIQ_DSN"]
+
 const tenantStore = createTenantStore()
 
-const client = new FabriqClient({
-  baseUrl,
-  transport: createHttpTransport({ baseUrl, getHeaders: () => tenantStore.headers() }),
-})
+// When a DSN is provided, it fully determines the client (baseUrl, auth, tenant,
+// API version) via connect(). Note the DSN carries its own tenant, so in this mode
+// the tenant-switcher UI becomes display-only (fixed to the DSN's tenant) — acceptable
+// for v1. Otherwise, fall back to the existing VITE_FABRIQ_API_URL + tenant-store-header
+// path unchanged.
+const client = dsn
+  ? connect(dsn)
+  : new FabriqClient({
+      baseUrl,
+      transport: createHttpTransport({ baseUrl, getHeaders: () => tenantStore.headers() }),
+    })
 
 // Plugin persistence: try the backend HTTP store first; fall back to localStorage.
 // This means registered remote plugins survive page reloads even when the
