@@ -1,5 +1,6 @@
 import { useFabriqClient, useTenantContext, useTenant } from "@fabriq/admin-sdk"
 import { ConnectionInfoCard } from "./ConnectionInfoCard"
+import { KeysCard } from "./KeysCard"
 
 // ---------------------------------------------------------------------------
 // TenantSection — reads the current tenant (if a tenant store is configured)
@@ -11,7 +12,12 @@ import { ConnectionInfoCard } from "./ConnectionInfoCard"
 function TenantSection({ client }: { client: ReturnType<typeof useFabriqClient> }) {
   const store = useTenantContext()
   if (!store) {
-    return <ConnectionInfoCard client={client} tenant={null} />
+    return (
+      <>
+        <ConnectionInfoCard client={client} tenant={null} />
+        <KeysCard tenant={null} />
+      </>
+    )
   }
   return <TenantSectionInner client={client} store={store} />
 }
@@ -24,7 +30,12 @@ function TenantSectionInner({
   store: NonNullable<ReturnType<typeof useTenantContext>>
 }) {
   const { tenant } = useTenant(store)
-  return <ConnectionInfoCard client={client} tenant={tenant} />
+  return (
+    <>
+      <ConnectionInfoCard client={client} tenant={tenant} />
+      <KeysCard tenant={tenant} />
+    </>
+  )
 }
 
 export function ConnectionPage() {
