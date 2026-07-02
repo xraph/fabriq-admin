@@ -10,7 +10,7 @@
  * network I/O occurs.  The stub returns an empty EntityPage.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import "@testing-library/jest-dom"
 import { App } from "./App"
 
@@ -38,18 +38,23 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("App smoke test", () => {
-  it("mounts the .fabriq-admin container", () => {
+  it("mounts the .fabriq-admin container", async () => {
+    // App is now wrapped in <AuthGate>, which probes GET /meta (keyless)
+    // before deciding whether to render the console; the fetch stub answers
+    // every request with 200, so the gate resolves to "no auth" and renders
+    // children — but that resolution is asynchronous, so wait for it.
     const { container } = render(<App />)
-    // FabriqAdmin renders <div className="fabriq-admin" ...>
-    expect(container.querySelector(".fabriq-admin")).not.toBeNull()
+    await waitFor(() => {
+      expect(container.querySelector(".fabriq-admin")).not.toBeNull()
+    })
   })
 
-  it('shows the "Entities" nav item contributed by entityBrowserPlugin', () => {
+  it('shows the "Entities" nav item contributed by entityBrowserPlugin', async () => {
     render(<App />)
     // entityBrowserPlugin contributes navItems: [{ label: "Entities", to: "entities" }].
     // The Overview QuickLinksCard also renders "Entities" as a link button, so there may
     // be multiple elements — assert at least one is present.
-    const els = screen.getAllByText("Entities")
+    const els = await screen.findAllByText("Entities")
     expect(els.length).toBeGreaterThanOrEqual(1)
   })
 })

@@ -1,14 +1,14 @@
+import { useMemo } from "react"
 import {
   FabriqAdmin,
   FabriqClient,
-  connect,
-  createHttpTransport,
   createTenantStore,
   loadRemotePlugin,
   compositePluginStore,
   httpPluginStore,
   localStoragePluginStore,
 } from "@fabriq/admin-sdk"
+import { AuthGate } from "./AuthGate"
 import { overviewPlugin } from "@fabriq/plugin-overview"
 import { entityBrowserPlugin } from "@fabriq/plugin-entity-browser"
 import { typesPlugin } from "@fabriq/plugin-types"
@@ -45,38 +45,7 @@ const federationRuntime = {
   unwrapDefault: __federation_method_unwrapDefault,
 }
 
-// Read the API base URL from the environment (injected by Vite at build/dev time).
-// Defaults to http://localhost:8080/admin for local development.
-const baseUrl: string =
-  (import.meta.env as Record<string, string | undefined>)["VITE_FABRIQ_API_URL"] ??
-  "http://localhost:8080/admin"
-
-const dsn = (import.meta.env as Record<string, string | undefined>)["VITE_FABRIQ_DSN"]
-
 const tenantStore = createTenantStore()
-
-// When a DSN is provided, it fully determines the client (baseUrl, auth, tenant,
-// API version) via connect(). Note the DSN carries its own tenant, so in this mode
-// the tenant-switcher UI becomes display-only (fixed to the DSN's tenant) — acceptable
-// for v1. Otherwise, fall back to the existing VITE_FABRIQ_API_URL + tenant-store-header
-// path unchanged.
-const client = dsn
-  ? connect(dsn)
-  : new FabriqClient({
-      baseUrl,
-      transport: createHttpTransport({ baseUrl, getHeaders: () => tenantStore.headers() }),
-    })
-
-// Plugin persistence: try the backend HTTP store first; fall back to localStorage.
-// This means registered remote plugins survive page reloads even when the
-// backend is not running.
-const store = compositePluginStore({
-  primary: httpPluginStore(client),
-  fallback: localStoragePluginStore(),
-  onFallback: (err) => {
-    console.warn("[fabriq-admin] plugin store fallback to localStorage:", err)
-  },
-})
 
 // Builtin plugins — always mounted. Overview is first (order 0 / index route "").
 const plugins = [
@@ -102,27 +71,53 @@ const plugins = [
   commandsPlugin,
 ]
 
+/**
+ * Renders the FabriqAdmin console for an already-authenticated client.
+ * Separated so the plugin store (which wraps the client in an HTTP-backed
+ * store with localStorage fallback) is only built once per client instance.
+ */
+function Console({ client }: { client: FabriqClient }) {
+  // Plugin persistence: try the backend HTTP store first; fall back to
+  // localStorage. This means registered remote plugins survive page reloads
+  // even when the backend is not running.
+  const store = useMemo(
+    () =>
+      compositePluginStore({
+        primary: httpPluginStore(client),
+        fallback: localStoragePluginStore(),
+        onFallback: (err) => {
+          console.warn("[fabriq-admin] plugin store fallback to localStorage:", err)
+        },
+      }),
+    [client],
+  )
+
+  return (
+    // routing="path": real URLs; production static hosting needs an SPA rewrite to index.html (Vite dev already SPA-falls-back).
+    <FabriqAdmin
+      client={client}
+      plugins={plugins}
+      theme="system"
+      store={store}
+      tenantStore={tenantStore}
+      loadRemote={(spec) =>
+        loadRemotePlugin({
+          url: spec.url,
+          scope: spec.scope,
+          module: spec.module,
+          federationRuntime,
+        })
+      }
+      routing="path"
+      path="/"
+    />
+  )
+}
+
 export function App() {
   return (
-    <>
-      {/* routing="path": real URLs; production static hosting needs an SPA rewrite to index.html (Vite dev already SPA-falls-back). */}
-      <FabriqAdmin
-        client={client}
-        plugins={plugins}
-        theme="system"
-        store={store}
-        tenantStore={tenantStore}
-        loadRemote={(spec) =>
-          loadRemotePlugin({
-            url: spec.url,
-            scope: spec.scope,
-            module: spec.module,
-            federationRuntime,
-          })
-        }
-        routing="path"
-        path="/"
-      />
-    </>
+    <AuthGate tenantStore={tenantStore}>
+      {(client) => <Console client={client} />}
+    </AuthGate>
   )
 }
