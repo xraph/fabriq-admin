@@ -71,3 +71,7 @@ export type { ParsedDsn } from "./dsn"
 export { connect } from "./connect"
 
 export { getSessionToken, setSessionToken, clearSessionToken } from "./session"
+export {
+	MergedStateCard, UpdateLogCard, CrdtSpecCard, SegmentsTable, HistoryRangeCard,
+	prettyJson, humanizeSize, truncate,
+} from "./crdtComponents"

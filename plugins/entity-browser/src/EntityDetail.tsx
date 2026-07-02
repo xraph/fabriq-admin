@@ -5,6 +5,11 @@ import {
   useQueryClient,
   usePluginHost,
   CapabilityBadges,
+  MergedStateCard,
+  UpdateLogCard,
+  CrdtSpecCard,
+  SegmentsTable,
+  HistoryRangeCard,
 } from "@fabriq/admin-sdk"
 import {
   Button,
@@ -29,6 +34,10 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
 } from "@fabriq/ui"
 import { ArrowLeft, Copy, Check, Pencil, Trash2, Share2 } from "lucide-react"
 import { EntityForm } from "./EntityForm"
@@ -198,6 +207,17 @@ function RawJson({ data }: { data: Record<string, unknown> }) {
 
 type ViewMode = "fields" | "raw"
 
+/**
+ * Resolve a CRDT document id from the route (type, id). A materialized document
+ * row uses the full docId ("<entity>/<id>") as its relational `id`, so the route
+ * `id` may already carry the entity prefix — in that case return it unchanged
+ * (prefixing again produced the broken "note/note/roadmap" docId). Otherwise
+ * build "<type>/<id>" from a bare id.
+ */
+export function resolveDocId(type: string, id: string): string {
+  return id.startsWith(`${type}/`) ? id : `${type}/${id}`
+}
+
 export function EntityDetail({ params }: { params?: Record<string, string> }) {
   const id = params?.id ?? ""
   const type = params?.type ?? ""
@@ -214,15 +234,60 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
   const { data, isLoading, isError } = useFabriqQuery(
     ["entity", type, id],
     (client) => client.getEntity(id, { type }),
-    { enabled: Boolean(id) && Boolean(type) },
+    {
+      enabled: Boolean(id) && Boolean(type),
+      // A document entity often has no materialized relational row → getEntity
+      // 404s. A 404 is definitive; don't retry it (avoids the 4× request storm).
+      retry: (count, err) => (err as { status?: number })?.status !== 404 && count < 3,
+    },
   )
 
   // Per-type capabilities — which subsystems THIS entity type participates in.
   // Enhancement only: degrade quietly if the backend doesn't support it.
-  const { data: caps } = useFabriqQuery(
+  const { data: caps, isFetched: capsFetched } = useFabriqQuery(
     ["entity-caps", type],
     (client) => client.getEntityCapabilities(type),
     { enabled: Boolean(type), retry: false },
+  )
+
+  // isDocument drives the Document tab. isPureDocument (kind === "document")
+  // is the write-action gate: pure KindDocument entities can't be
+  // created/edited/deleted via the command plane (the backend rejects
+  // non-aggregate writes), so they render fully read-only. A CRDT-tagged
+  // *aggregate* stays editable/deletable.
+  const isDocument = caps?.capabilities?.crdt === true
+
+  const { data: crdtEnts } = useFabriqQuery(
+    ["crdt-entities"],
+    (client) => client.getCrdtEntities(),
+    { retry: false },
+  )
+  const crdtInfo = (crdtEnts?.items ?? []).find((e) => e.entity === type)
+  const isPureDocument = crdtInfo?.kind === "document"
+
+  const docId = resolveDocId(type, id)
+
+  const { data: crdtDoc } = useFabriqQuery(
+    ["crdt", docId],
+    (client) => client.getCrdtDocument(docId),
+    { enabled: isDocument, retry: false },
+  )
+  const { data: crdtUpdates } = useFabriqQuery(
+    ["crdt-updates", docId],
+    (client) => client.getCrdtUpdates(docId),
+    { enabled: isDocument, retry: false },
+  )
+  const { data: crdtSegments } = useFabriqQuery(
+    ["crdt-segments", docId],
+    (client) => client.getCrdtSegments(docId),
+    { enabled: isDocument, retry: false },
+  )
+
+  const [histRange, setHistRange] = useState<{ from: number; to: number } | null>(null)
+  const { data: crdtHistory } = useFabriqQuery(
+    ["crdt-history", docId, histRange?.from, histRange?.to],
+    (client) => client.getCrdtHistory(docId, histRange?.from, histRange?.to),
+    { enabled: isDocument && histRange !== null, retry: false },
   )
 
   async function handleEdit(nextData: Record<string, unknown>) {
@@ -247,7 +312,12 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
     }
   }
 
-  if (isLoading) {
+  // Document entities are driven by the CRDT plane; their relational row is an
+  // OPTIONAL async-materialized projection that often does not exist. Only gate
+  // the whole detail on the relational getEntity query for NON-document
+  // entities. Wait for the capability probe to settle first so we know the kind
+  // before deciding whether the relational row is required.
+  if (!capsFetched || (!isDocument && isLoading)) {
     return (
       <Card>
         <CardHeader>
@@ -267,7 +337,7 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
     )
   }
 
-  if (isError) {
+  if (!isDocument && isError) {
     return (
       <div className="space-y-4">
         <Button variant="ghost" onClick={() => navigate("entities")} aria-label="Back">
@@ -294,13 +364,13 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
         <span className="font-mono text-foreground truncate max-w-xs" title={id}>{id}</span>
       </nav>
 
-      {data && (
+      {(data || isDocument) && (
         <Card>
           <CardHeader>
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-3 flex-wrap">
-                <CardTitle className="font-mono text-lg">{data.id}</CardTitle>
-                <Badge variant="secondary">{data.type}</Badge>
+                <CardTitle className="font-mono text-lg">{data?.id ?? id}</CardTitle>
+                <Badge variant="secondary">{data?.type ?? type}</Badge>
                 {caps?.capabilities && (
                   <CapabilityBadges capabilities={caps.capabilities} />
                 )}
@@ -310,47 +380,109 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
                   <ArrowLeft className="h-4 w-4 mr-1" />
                   Back
                 </Button>
-                <CopyButton value={data.id} label="Copy ID" />
-                <CopyButton value={JSON.stringify(data.data, null, 2)} label="Copy JSON" />
-                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} aria-label="Edit">
-                  <Pencil className="h-3 w-3 mr-1" />
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setDeleteOpen(true)}
-                  aria-label="Delete"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  Delete
-                </Button>
+                <CopyButton value={data?.id ?? id} label="Copy ID" />
+                {data && <CopyButton value={JSON.stringify(data.data, null, 2)} label="Copy JSON" />}
+                {/* Documents are never full-row-edited from the admin. */}
+                {!isDocument && (
+                  <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} aria-label="Edit">
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Edit
+                  </Button>
+                )}
+                {/* Pure KindDocument entities can't be deleted — the backend rejects it. */}
+                {!isPureDocument && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setDeleteOpen(true)}
+                    aria-label="Delete"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Delete
+                  </Button>
+                )}
               </div>
             </div>
-            <div className="flex gap-1 mt-3" role="group" aria-label="View mode">
-              <Button
-                variant={view === "fields" ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setView("fields")}
-                aria-label="Fields"
-                aria-pressed={view === "fields"}
-              >
-                Fields
-              </Button>
-              <Button
-                variant={view === "raw" ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setView("raw")}
-                aria-label="Raw JSON"
-                aria-pressed={view === "raw"}
-              >
-                Raw JSON
-              </Button>
-            </div>
+            {!isDocument && (
+              <div className="flex gap-1 mt-3" role="group" aria-label="View mode">
+                <Button
+                  variant={view === "fields" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setView("fields")}
+                  aria-label="Fields"
+                  aria-pressed={view === "fields"}
+                >
+                  Fields
+                </Button>
+                <Button
+                  variant={view === "raw" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setView("raw")}
+                  aria-label="Raw JSON"
+                  aria-pressed={view === "raw"}
+                >
+                  Raw JSON
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
-            {view === "fields" ? <FieldsTable data={data.data} /> : <RawJson data={data.data} />}
+            {isDocument ? (
+              <Tabs defaultValue="document">
+                <TabsList>
+                  <TabsTrigger value="document">Document</TabsTrigger>
+                  <TabsTrigger value="fields">Fields</TabsTrigger>
+                </TabsList>
+                <TabsContent value="document">
+                  <div className="flex flex-col gap-4 mt-3">
+                    {crdtInfo && <CrdtSpecCard info={crdtInfo} />}
+                    {crdtDoc && <MergedStateCard doc={crdtDoc} />}
+                    {crdtUpdates && <UpdateLogCard updates={crdtUpdates} />}
+                    {crdtSegments && <SegmentsTable segments={crdtSegments.items} />}
+                    <HistoryRangeCard
+                      items={crdtHistory?.items ?? []}
+                      onLoad={(from, to) => setHistRange({ from, to })}
+                    />
+                  </div>
+                </TabsContent>
+                <TabsContent value="fields">
+                  <div className="flex flex-col gap-3 mt-3">
+                    <div className="flex gap-1" role="group" aria-label="View mode">
+                      <Button
+                        variant={view === "fields" ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={() => setView("fields")}
+                        aria-label="Fields"
+                        aria-pressed={view === "fields"}
+                      >
+                        Fields
+                      </Button>
+                      <Button
+                        variant={view === "raw" ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={() => setView("raw")}
+                        aria-label="Raw JSON"
+                        aria-pressed={view === "raw"}
+                      >
+                        Raw JSON
+                      </Button>
+                    </div>
+                    {data ? (
+                      view === "fields" ? <FieldsTable data={data.data} /> : <RawJson data={data.data} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        This document has not been materialized to a relational row yet.
+                      </p>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            ) : view === "fields" ? (
+              <FieldsTable data={data?.data ?? {}} />
+            ) : (
+              <RawJson data={data?.data ?? {}} />
+            )}
           </CardContent>
         </Card>
       )}
@@ -386,6 +518,7 @@ export function EntityDetail({ params }: { params?: Record<string, string> }) {
             <DialogDescription>
               This permanently deletes <span className="font-mono">{id}</span>. This
               action cannot be undone.
+              {crdtInfo && " This also purges the entity's offloaded CRDT history."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -111,6 +111,13 @@ export {
   BreadcrumbSeparator,
   BreadcrumbEllipsis,
 } from "./components/ui/breadcrumb"
+export {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  tabsListVariants,
+} from "./components/ui/tabs"
 
 // Data grid (reui / TanStack Table)
 export {

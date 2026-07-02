@@ -1,3 +1,5 @@
+import "@testing-library/jest-dom/vitest"
+
 // Polyfills for jsdom test environment
 if (typeof window !== "undefined" && !window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {
