@@ -1,6 +1,11 @@
 {
   "name": "@fabriq-ai/plugin-projections",
   "version": "0.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xraph/fabriq-admin.git",
+    "directory": "plugins/projections"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
