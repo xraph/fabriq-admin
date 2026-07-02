@@ -44,7 +44,6 @@ export function ConnectionPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Connection</h1>
       <TenantSection client={client} />
-      {/* KeysCard mounted in Task 5 */}
     </div>
   )
 }
