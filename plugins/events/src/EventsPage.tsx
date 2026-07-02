@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import {
   useFabriqClient,
+  useFabriqQuery,
+  useTenantContext,
   usePluginHost,
+  MultiSuggestCombobox,
   HttpTransportError,
   type OutboxEvent,
   type EventsQuery,
@@ -62,13 +65,28 @@ function toErr(err: unknown): ErrState {
   return { message: err instanceof Error ? err.message : String(err) }
 }
 
+const NOOP_SUBSCRIBE = () => () => {}
+
 export function EventsPage() {
   const client = useFabriqClient()
   const { navigate } = usePluginHost()
 
+  // Distinct aggregate/event types for the filter comboboxes (tenant-scoped).
+  const tenantStore = useTenantContext()
+  const tenantId = React.useSyncExternalStore(
+    tenantStore ? tenantStore.subscribe : NOOP_SUBSCRIBE,
+    () => tenantStore?.get() ?? null,
+    () => null,
+  )
+  const { data: facets } = useFabriqQuery(
+    ["event-facets", tenantId],
+    (c) => c.eventFacets(),
+    { retry: false },
+  )
+
   // Draft filter inputs (applied on submit) vs the active query used for fetching.
-  const [aggregate, setAggregate] = useState("")
-  const [type, setType] = useState("")
+  const [aggregate, setAggregate] = useState<string[]>([])
+  const [type, setType] = useState<string[]>([])
   const [aggId, setAggId] = useState("")
   const [pub, setPub] = useState<PubFilter>("all")
   const [active, setActive] = useState<EventsQuery>({})
@@ -126,16 +144,16 @@ export function EventsPage() {
   function applyFilters() {
     setExpanded(new Set())
     setActive({
-      aggregate: aggregate.trim() || undefined,
-      type: type.trim() || undefined,
+      aggregate: aggregate.length ? aggregate : undefined,
+      type: type.length ? type : undefined,
       aggId: aggId.trim() || undefined,
       published: pubFlag(pub),
     })
   }
 
   function clearFilters() {
-    setAggregate("")
-    setType("")
+    setAggregate([])
+    setType([])
     setAggId("")
     setPub("all")
     setExpanded(new Set())
@@ -179,15 +197,17 @@ export function EventsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="grid gap-1.5 sm:w-44">
+            <div className="grid gap-1.5 sm:w-56">
               <label htmlFor="ev-agg" className="text-sm font-medium">Aggregate</label>
-              <Input id="ev-agg" value={aggregate} onChange={(e) => setAggregate(e.target.value)}
-                placeholder="e.g. product" className="font-mono" />
+              <MultiSuggestCombobox id="ev-agg" values={aggregate} onChange={setAggregate}
+                suggestions={facets?.aggregates ?? []} placeholder="e.g. product"
+                emptyMessage="No aggregate types." className="font-mono" />
             </div>
-            <div className="grid gap-1.5 sm:w-52">
+            <div className="grid gap-1.5 sm:w-64">
               <label htmlFor="ev-type" className="text-sm font-medium">Event type</label>
-              <Input id="ev-type" value={type} onChange={(e) => setType(e.target.value)}
-                placeholder="e.g. product.updated" className="font-mono" />
+              <MultiSuggestCombobox id="ev-type" values={type} onChange={setType}
+                suggestions={facets?.types ?? []} placeholder="e.g. product.updated"
+                emptyMessage="No event types." className="font-mono" />
             </div>
             <div className="grid gap-1.5 sm:w-52">
               <label htmlFor="ev-aggid" className="text-sm font-medium">Aggregate id</label>

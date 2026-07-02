@@ -272,6 +272,39 @@ describe("FilesPage — download", () => {
 
     await waitFor(() => expect(dlSpy).toHaveBeenCalledWith("file1"))
   })
+
+  it("names the download by the catalog node name, not the opaque blob id", async () => {
+    const { client } = makeClient(listHandler({ __root__: ROOT }))
+    // Cross-origin, the browser can't read Content-Disposition, so downloadFile
+    // falls back to the opaque blob id. The UI must still use the real name.
+    vi.spyOn(client, "downloadFile").mockResolvedValue({
+      blob: new Blob(["x"]),
+      filename: "sha256:deadbeefcafe",
+      contentType: "text/plain",
+    })
+    // jsdom implements neither object-URL API; assign so the handler reaches the
+    // anchor instead of bailing into its catch.
+    ;(URL as unknown as { createObjectURL: unknown }).createObjectURL = () => "blob:x"
+    ;(URL as unknown as { revokeObjectURL: unknown }).revokeObjectURL = () => {}
+    // Capture the anchor the download handler creates.
+    const anchors: HTMLAnchorElement[] = []
+    const realCreate = document.createElement.bind(document)
+    vi.spyOn(document, "createElement").mockImplementation(((tag: string) => {
+      const el = realCreate(tag)
+      if (tag === "a") anchors.push(el as HTMLAnchorElement)
+      return el
+    }) as typeof document.createElement)
+
+    renderFiles(client)
+    await screen.findByText("readme.txt")
+    fireEvent.click(screen.getByRole("button", { name: /download readme\.txt/i }))
+
+    await waitFor(() => expect(anchors.length).toBeGreaterThan(0))
+    expect(anchors[anchors.length - 1].download).toBe("readme.txt")
+    vi.restoreAllMocks()
+    delete (URL as unknown as { createObjectURL?: unknown }).createObjectURL
+    delete (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL
+  })
 })
 
 // ---------------------------------------------------------------------------

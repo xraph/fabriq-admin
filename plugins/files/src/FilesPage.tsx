@@ -181,7 +181,11 @@ export function FilesPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = filename || node.name
+      // Prefer the catalog node name (always the real "name.ext"). The
+      // Content-Disposition-derived filename is a fallback: cross-origin it is
+      // often unreadable (needs Access-Control-Expose-Headers) and downloadFile
+      // then falls back to the opaque blob id, which must never name the file.
+      a.download = node.name || filename
       document.body.appendChild(a)
       a.click()
       a.remove()

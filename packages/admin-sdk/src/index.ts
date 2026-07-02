@@ -59,9 +59,15 @@ export type { RoutingStrategy } from "./FabriqAdmin"
 
 export { EntityTypeCombobox } from "./EntityTypeCombobox"
 export type { EntityTypeComboboxProps } from "./EntityTypeCombobox"
+export { SuggestCombobox } from "./SuggestCombobox"
+export type { SuggestComboboxProps } from "./SuggestCombobox"
+export { MultiSuggestCombobox } from "./MultiSuggestCombobox"
+export type { MultiSuggestComboboxProps } from "./MultiSuggestCombobox"
 export { ConfirmProvider, useConfirm } from "./confirm"
 export type { ConfirmOptions, ConfirmFn } from "./confirm"
 
 export { parseDsn, dsnBaseUrl } from "./dsn"
 export type { ParsedDsn } from "./dsn"
 export { connect } from "./connect"
+
+export { getSessionToken, setSessionToken, clearSessionToken } from "./session"

@@ -293,16 +293,17 @@ function QuickLinksCard() {
         <CardDescription>Navigate to registered sections.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2">
           {navItems.map((item) => (
             <Button
               key={item.to}
-              variant="ghost"
-              className="justify-start gap-2 h-9 px-3"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 rounded-full px-3"
               onClick={() => navigate(item.to)}
             >
-              <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {item.label}
+              <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             </Button>
           ))}
         </div>

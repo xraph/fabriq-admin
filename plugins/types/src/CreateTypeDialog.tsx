@@ -35,7 +35,7 @@ export function CreateTypeDialog({ open, onOpenChange }: { open: boolean; onOpen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>New type</DialogTitle>
           <DialogDescription>Define a dynamic entity type and its fields.</DialogDescription>

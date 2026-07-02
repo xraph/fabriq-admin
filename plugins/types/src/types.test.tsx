@@ -5,10 +5,14 @@ import { FabriqClient, FabriqAdmin, type FabriqTransport } from "@fabriq/admin-s
 import { typesPlugin } from "./index"
 
 function fakeTransport(opts?: { caps?: Record<string, boolean> }): FabriqTransport {
+  // schema.write is advertised via /meta (a capability string list), not the
+  // /capabilities subsystem map — mirror that so the gate reads the real source.
+  const capList = Object.entries(opts?.caps ?? {}).filter(([, v]) => v).map(([k]) => k)
   return {
     async request<T>(o: { path: string }): Promise<T> {
       if (o.path.endsWith("/entities/types")) return { types: ["order", "product"] } as unknown as T
-      if (o.path.endsWith("/capabilities")) return { capabilities: opts?.caps ?? {} } as unknown as T
+      if (o.path.endsWith("/meta")) return { capabilities: capList } as unknown as T
+      if (o.path.endsWith("/capabilities")) return { capabilities: {} } as unknown as T
       if (o.path.includes("/schema")) return { type: "order", fields: [] } as unknown as T
       return {} as T
     },
@@ -54,6 +58,7 @@ it("TypeDetail renders the schema fields", async () => {
     transport: {
       async request<T>(o: { path: string }): Promise<T> {
         if (o.path.endsWith("/entities/types")) return { types: ["order"] } as unknown as T
+        if (o.path.endsWith("/meta")) return { capabilities: [] } as unknown as T
         if (o.path.endsWith("/capabilities")) return { capabilities: {} } as unknown as T
         if (o.path.includes("/schema")) {
           return { type: "order", fields: [
@@ -79,6 +84,7 @@ it("TypeDetail hides write controls when schema.write is absent", async () => {
     transport: {
       async request<T>(o: { path: string }): Promise<T> {
         if (o.path.endsWith("/entities/types")) return { types: ["order"] } as unknown as T
+        if (o.path.endsWith("/meta")) return { capabilities: [] } as unknown as T
         if (o.path.endsWith("/capabilities")) return { capabilities: {} } as unknown as T
         if (o.path.includes("/schema")) {
           return { type: "order", fields: [
@@ -106,6 +112,7 @@ it("create-type dialog submits createEntityType with translated columns", async 
       async request<T>(o: any): Promise<T> {
         calls.push(o)
         if (o.path.endsWith("/entities/types")) return { types: [] } as unknown as T
+        if (o.path.endsWith("/meta")) return { capabilities: ["schema.write"] } as unknown as T
         if (o.path.endsWith("/capabilities")) return { capabilities: { "schema.write": true } } as unknown as T
         if (o.path.endsWith("/schema") && o.method === "POST") return { type: "invoice", fields: [] } as unknown as T
         if (o.path.includes("/schema")) return { type: "invoice", fields: [] } as unknown as T
@@ -136,6 +143,7 @@ it("delete-type is gated behind a typed confirm and calls deleteEntityType", asy
       async request<T>(o: any): Promise<T> {
         calls.push(o)
         if (o.path.endsWith("/entities/types")) return { types: ["order"] } as unknown as T
+        if (o.path.endsWith("/meta")) return { capabilities: ["schema.write"] } as unknown as T
         if (o.path.endsWith("/capabilities")) return { capabilities: { "schema.write": true } } as unknown as T
         if (o.path.includes("/schema")) return { type: "order", fields: [{ name: "total", kind: "number", required: true }] } as unknown as T
         return {} as T
@@ -168,6 +176,7 @@ it("drop-field calls dropEntityField with confirm after typed match", async () =
       async request<T>(o: any): Promise<T> {
         calls.push(o)
         if (o.path.endsWith("/entities/types")) return { types: ["order"] } as unknown as T
+        if (o.path.endsWith("/meta")) return { capabilities: ["schema.write"] } as unknown as T
         if (o.path.endsWith("/capabilities")) return { capabilities: { "schema.write": true } } as unknown as T
         if (o.path.includes("/schema")) return { type: "order", fields: [{ name: "total", kind: "number", required: true }] } as unknown as T
         return {} as T

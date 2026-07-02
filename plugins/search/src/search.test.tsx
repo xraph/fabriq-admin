@@ -81,7 +81,7 @@ describe("searchPlugin shape", () => {
 describe("SearchPage — text mode", () => {
   it("Run calls searchText({type,q}) and renders items + count", async () => {
     const { client, request } = makeClient((opts) => {
-      if (opts.path.endsWith("/search")) {
+      if (/\/search\?/.test(opts.path)) {
         return {
           items: [
             { id: "p1", type: "product", data: { name: "Widget" } },
@@ -97,15 +97,36 @@ describe("SearchPage — text mode", () => {
     fireEvent.change(screen.getByLabelText("Query"), { target: { value: "wid" } })
     fireEvent.click(screen.getByRole("button", { name: /run/i }))
 
-    await waitFor(() => expect(opCall(request, /\/search$/)).toBeTruthy())
-    const arg = opCall(request, /\/search$/)!
-    expect(arg.path).toBe("http://test/search")
-    expect(arg.query).toMatchObject({ type: "product", q: "wid" })
+    await waitFor(() => expect(opCall(request, /\/search\?/)).toBeTruthy())
+    const arg = opCall(request, /\/search\?/)!
+    // Text search is now path-encoded (to support repeated filter params).
+    expect(arg.path).toContain("http://test/search?")
+    expect(arg.path).toContain("type=product")
+    expect(arg.path).toContain("q=wid")
 
     await screen.findByText("p1")
     expect(screen.getByText("p2")).toBeTruthy()
     // count badge
     expect(screen.getByText("2")).toBeTruthy()
+  })
+
+  it("passes an equality filter row through as a repeated filter param", async () => {
+    const { client, request } = makeClient((opts) => {
+      if (/\/search\?/.test(opts.path)) return { items: [] }
+      return {}
+    })
+    renderSearch(client)
+
+    fireEvent.change(screen.getByLabelText("Query"), { target: { value: "wid" } })
+    // Add a filter row, then fill field + value.
+    fireEvent.click(screen.getByRole("button", { name: /add filter/i }))
+    fireEvent.change(screen.getByLabelText(/Filters field 1/i), { target: { value: "status" } })
+    fireEvent.change(screen.getByLabelText(/Filters value 1/i), { target: { value: "active" } })
+    fireEvent.click(screen.getByRole("button", { name: /run/i }))
+
+    await waitFor(() => expect(opCall(request, /\/search\?/)).toBeTruthy())
+    const arg = opCall(request, /\/search\?/)!
+    expect(decodeURIComponent(arg.path)).toContain("filter=status:active")
   })
 })
 

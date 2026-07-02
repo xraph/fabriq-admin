@@ -49,6 +49,92 @@ function isVectorMode(mode: Mode): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Filter rows (shared: indexed-field filters for text, meta filters for vector)
+// ---------------------------------------------------------------------------
+
+type FilterRow = { k: string; v: string }
+
+/** Build a { field: value } map from non-empty rows, or undefined if none. */
+function rowsToFilter(rows: FilterRow[]): Record<string, string> | undefined {
+  const out: Record<string, string> = {}
+  for (const r of rows) {
+    const k = r.k.trim()
+    const v = r.v.trim()
+    if (k && v) out[k] = v
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+/**
+ * A small key/value filter-row editor: add/remove rows of {field, value}. Used
+ * for indexed-field equality filters (text search) and embedding-meta filters
+ * (vector search). All rows are AND-ed server-side.
+ */
+function KeyValueFilters({
+  rows,
+  onChange,
+  label,
+  hint,
+  keyPlaceholder,
+  valuePlaceholder,
+}: {
+  rows: FilterRow[]
+  onChange: (rows: FilterRow[]) => void
+  label: string
+  hint: string
+  keyPlaceholder: string
+  valuePlaceholder: string
+}) {
+  function update(i: number, patch: Partial<FilterRow>) {
+    onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  }
+  return (
+    <div className="grid gap-1.5">
+      <span className="text-sm font-medium">{label}</span>
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <Input
+            aria-label={`${label} field ${i + 1}`}
+            value={r.k}
+            onChange={(e) => update(i, { k: e.target.value })}
+            placeholder={keyPlaceholder}
+            className="font-mono sm:w-48"
+          />
+          <span className="text-muted-foreground text-sm">=</span>
+          <Input
+            aria-label={`${label} value ${i + 1}`}
+            value={r.v}
+            onChange={(e) => update(i, { v: e.target.value })}
+            placeholder={valuePlaceholder}
+            className="font-mono flex-1"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={`Remove filter ${i + 1}`}
+            onClick={() => onChange(rows.filter((_, j) => j !== i))}
+          >
+            ✕
+          </Button>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onChange([...rows, { k: "", v: "" }])}
+        >
+          + Add filter
+        </Button>
+        <span className="text-xs text-muted-foreground">{hint}</span>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Result shapes held in state
 // ---------------------------------------------------------------------------
 
@@ -109,6 +195,9 @@ export function SearchPage() {
   const [query, setQuery] = useState("")
   const [entityId, setEntityId] = useState("")
   const [limit, setLimit] = useState(10)
+  const [sort, setSort] = useState("")
+  const [offset, setOffset] = useState(0)
+  const [filters, setFilters] = useState<FilterRow[]>([])
 
   const [isSearching, setIsSearching] = useState(false)
   const [result, setResult] = useState<ResultState | null>(null)
@@ -121,7 +210,7 @@ export function SearchPage() {
     )
   }
 
-  async function handleRun() {
+  async function handleRun(runOffset = 0) {
     setHint(null)
     setError(null)
 
@@ -139,17 +228,26 @@ export function SearchPage() {
       return
     }
 
+    const filter = rowsToFilter(filters)
+    setOffset(runOffset)
     setIsSearching(true)
     setResult(null)
     try {
       if (mode === "text") {
-        const res = await client.searchText({ type: t, q: query.trim(), limit })
+        const res = await client.searchText({
+          type: t,
+          q: query.trim(),
+          limit,
+          offset: runOffset,
+          sort: sort.trim() || undefined,
+          filter,
+        })
         setResult({ kind: "text", items: res.items ?? [] })
       } else if (mode === "semantic") {
-        const res = await client.searchVector({ type: t, query: query.trim(), k: limit })
+        const res = await client.searchVector({ type: t, query: query.trim(), k: limit, filter })
         setResult({ kind: "vector", matches: res.matches ?? [] })
       } else {
-        const res = await client.searchVector({ type: t, id: entityId.trim(), k: limit })
+        const res = await client.searchVector({ type: t, id: entityId.trim(), k: limit, filter })
         setResult({ kind: "vector", matches: res.matches ?? [] })
       }
     } catch (err) {
@@ -176,6 +274,17 @@ export function SearchPage() {
         <p className="text-sm text-muted-foreground mt-1">
           Run full-text or vector/semantic search and inspect ranked results.
         </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Looking for agentic retrieval?{" "}
+          <button
+            type="button"
+            className="underline hover:text-foreground"
+            onClick={() => navigate("recall")}
+          >
+            Recall
+          </button>{" "}
+          runs the agent toolkit&rsquo;s hybrid search — RRF fusion of vector, full-text, and graph.
+        </p>
       </div>
 
       <Card>
@@ -198,6 +307,7 @@ export function SearchPage() {
                   setResult(null)
                   setError(null)
                   setHint(null)
+                  setOffset(0)
                 }}
               >
                 {m.label}
@@ -266,11 +376,39 @@ export function SearchPage() {
               />
             </div>
 
-            <Button type="button" onClick={handleRun} disabled={isSearching} className="gap-2 self-end">
+            <Button type="button" onClick={() => handleRun(0)} disabled={isSearching} className="gap-2 self-end">
               <SearchIcon className="h-4 w-4" aria-hidden="true" />
               {isSearching ? "Searching…" : "Run"}
             </Button>
           </div>
+
+          {/* Sort (text only) + equality filters (indexed fields for text,
+              embedding meta for vector). All AND-ed server-side. */}
+          {mode === "text" && (
+            <div className="grid gap-1.5 sm:w-72">
+              <label htmlFor="search-sort" className="text-sm font-medium">Sort</label>
+              <Input
+                id="search-sort"
+                aria-label="Sort"
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                placeholder="indexed field, e.g. price DESC"
+                className="font-mono"
+              />
+            </div>
+          )}
+          <KeyValueFilters
+            rows={filters}
+            onChange={setFilters}
+            label={mode === "text" ? "Filters" : "Meta filters"}
+            hint={
+              mode === "text"
+                ? "Equality over indexed fields (AND)."
+                : "Equality over embedding meta (AND)."
+            }
+            keyPlaceholder={mode === "text" ? "field" : "meta key"}
+            valuePlaceholder="value"
+          />
 
           <TenantNote />
           </>
@@ -304,7 +442,34 @@ export function SearchPage() {
           )}
 
           {result?.kind === "text" && (
-            <TextResults items={result.items} onOpen={gotoEntity} />
+            <>
+              <TextResults items={result.items} onOpen={gotoEntity} />
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={offset === 0 || isSearching}
+                  onClick={() => handleRun(Math.max(0, offset - limit))}
+                >
+                  ← Prev
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {result.items.length === 0
+                    ? "No results"
+                    : `Showing ${offset + 1}–${offset + result.items.length}`}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={result.items.length < limit || isSearching}
+                  onClick={() => handleRun(offset + limit)}
+                >
+                  Next →
+                </Button>
+              </div>
+            </>
           )}
           {result?.kind === "vector" && (
             <VectorResults matches={result.matches} onOpen={gotoEntity} />

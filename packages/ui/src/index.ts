@@ -157,4 +157,9 @@ export {
   ComboboxSeparator,
   ComboboxTrigger,
   ComboboxValue,
+  ComboboxCollection,
+  ComboboxChips,
+  ComboboxChip,
+  ComboboxChipsInput,
+  useComboboxAnchor,
 } from "./components/ui/combobox"

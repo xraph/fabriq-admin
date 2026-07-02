@@ -1,14 +1,7 @@
-import React, { useMemo, useState } from "react"
-import {
-  Combobox,
-  ComboboxInput,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxList,
-  ComboboxItem,
-} from "@fabriq/ui"
+import React from "react"
 import { useFabriqQuery } from "./provider"
 import { useTenantContext } from "./tenant"
+import { SuggestCombobox } from "./SuggestCombobox"
 
 const NOOP_SUBSCRIBE = () => () => {}
 
@@ -39,9 +32,8 @@ export interface EntityTypeComboboxProps {
  * (tenant-scoped, from listEntityTypes) while ALWAYS allowing free text, so a
  * user can target a type that isn't listed yet.
  *
- * Built on the shadcn/Base UI Combobox. Free text is preserved by injecting the
- * current query (and the current value) into the item list, so a novel type the
- * user types is always selectable.
+ * A thin wrapper over {@link SuggestCombobox} that supplies the entity-type
+ * suggestions; the free-text + filtering UX lives in SuggestCombobox.
  */
 export function EntityTypeCombobox({
   value,
@@ -62,46 +54,18 @@ export function EntityTypeCombobox({
     ["entity-types", tenantId],
     (c) => c.listEntityTypes(),
   )
-  const known = knownTypes ?? []
-
-  const [query, setQuery] = useState("")
-
-  // Item list = known types, plus the typed query and the current value when
-  // they are not already known — so a free-text type stays selectable.
-  const items = useMemo(() => {
-    const out = [...known]
-    const q = query.trim()
-    if (q && !out.includes(q)) out.push(q)
-    if (value && !out.includes(value)) out.push(value)
-    return out
-  }, [known, query, value])
 
   return (
-    <Combobox
-      items={items}
-      value={value || null}
-      onValueChange={(next) => {
-        if (typeof next === "string" && next.trim()) onChange(next.trim())
-      }}
-      onInputValueChange={(next) => setQuery(next)}
-    >
-      <ComboboxInput
-        id={id}
-        aria-label={ariaLabel}
-        placeholder={placeholder}
-        className={className}
-        disabled={disabled}
-      />
-      <ComboboxContent>
-        <ComboboxEmpty>No types found.</ComboboxEmpty>
-        <ComboboxList>
-          {(item: string) => (
-            <ComboboxItem key={item} value={item} className="font-mono">
-              {item}
-            </ComboboxItem>
-          )}
-        </ComboboxList>
-      </ComboboxContent>
-    </Combobox>
+    <SuggestCombobox
+      value={value}
+      onChange={onChange}
+      suggestions={knownTypes ?? []}
+      id={id}
+      className={className}
+      placeholder={placeholder}
+      emptyMessage="No types found."
+      aria-label={ariaLabel}
+      disabled={disabled}
+    />
   )
 }
