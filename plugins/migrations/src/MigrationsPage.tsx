@@ -293,25 +293,42 @@ function ScaffoldDialog({
   const client = useFabriqClient()
   const [name, setName] = useState("")
   const [version, setVersion] = useState("")
+  const [up, setUp] = useState("")
+  const [down, setDown] = useState("")
   const [result, setResult] = useState<MigrationScaffold | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  // Seed a fresh default version and clear prior output each time it opens.
+  // Seed a fresh default version and clear prior state each time it opens.
   useEffect(() => {
     if (open) {
       setVersion(defaultVersion())
+      setUp("")
+      setDown("")
       setResult(null)
       setError(null)
       setCopied(false)
     }
   }, [open])
 
+  // One DDL statement per line; blank lines are dropped (backend re-trims too).
+  function toStatements(text: string): string[] {
+    return text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+  }
+
   async function generate() {
     setError(null)
     setCopied(false)
     try {
-      const s = await client.migrationScaffold(name.trim(), version.trim())
+      const s = await client.migrationScaffold({
+        name: name.trim(),
+        version: version.trim(),
+        up: toStatements(up),
+        down: toStatements(down),
+      })
       setResult(s)
     } catch (e) {
       setResult(null)
@@ -329,14 +346,27 @@ function ScaffoldDialog({
     }
   }
 
+  // Download the generated file directly — save-ready, no copy/paste round-trip.
+  function download() {
+    if (!result) return
+    const blob = new Blob([result.content], { type: "text/x-go" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = result.filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Scaffold a migration</DialogTitle>
           <DialogDescription>
-            Generates a Go migration file skeleton. Nothing runs — save the output under
-            migrations/ and register it in the migration group.
+            Generates a Go migration file. Nothing runs and nothing is written on the server —
+            save the output under migrations/ and register it in the migration group. Add
+            Up/Down DDL below to get a save-ready file; leave them blank for a TODO skeleton.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -362,14 +392,43 @@ function ScaffoldDialog({
               onChange={(e) => setVersion(e.target.value)}
             />
           </div>
+          <div className="grid gap-1">
+            <label className="text-xs text-muted-foreground" htmlFor="scaffold-up">
+              up — forward DDL (one statement per line, optional)
+            </label>
+            <Textarea
+              id="scaffold-up"
+              className="min-h-20 font-mono"
+              placeholder={'CREATE TABLE IF NOT EXISTS widgets (id text)'}
+              value={up}
+              onChange={(e) => setUp(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1">
+            <label className="text-xs text-muted-foreground" htmlFor="scaffold-down">
+              down — reverse DDL (one statement per line, optional)
+            </label>
+            <Textarea
+              id="scaffold-down"
+              className="min-h-20 font-mono"
+              placeholder={'DROP TABLE IF EXISTS widgets'}
+              value={down}
+              onChange={(e) => setDown(e.target.value)}
+            />
+          </div>
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={generate} disabled={!name.trim() || !version.trim()}>
               Generate
             </Button>
             {result && (
-              <Button size="sm" variant="outline" onClick={copy}>
-                {copied ? "Copied" : "Copy"}
-              </Button>
+              <>
+                <Button size="sm" variant="outline" onClick={download}>
+                  Download .go
+                </Button>
+                <Button size="sm" variant="outline" onClick={copy}>
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </>
             )}
           </div>
           {error && (

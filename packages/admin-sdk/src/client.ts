@@ -1088,12 +1088,22 @@ export class FabriqClient {
     return `${this.baseUrl}/migrations/jobs/${encodeURIComponent(id)}/stream`
   }
 
-  /** GET /migrations/scaffold — generate a Go migration-file skeleton (runs nothing). */
-  migrationScaffold(name: string, version: string): Promise<MigrationScaffold> {
+  /**
+   * POST /migrations/scaffold — generate a Go migration-file skeleton (runs
+   * nothing, writes nothing). Optional `up`/`down` DDL statements are emitted
+   * inside the execAll blocks so the returned file is save-ready; when omitted
+   * the file carries TODO placeholders.
+   */
+  migrationScaffold(input: {
+    name: string
+    version: string
+    up?: string[]
+    down?: string[]
+  }): Promise<MigrationScaffold> {
     return this.transport.request<MigrationScaffold>({
-      method: "GET",
+      method: "POST",
       path: `${this.baseUrl}/migrations/scaffold`,
-      query: { name, version },
+      body: input,
     })
   }
 

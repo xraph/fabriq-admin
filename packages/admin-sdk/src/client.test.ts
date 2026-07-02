@@ -886,13 +886,24 @@ describe("FabriqClient", () => {
     expect(client.migrationJobStreamUrl("j1")).toBe("http://localhost:9000/migrations/jobs/j1/stream")
   })
 
-  it("migrationScaffold — GET /migrations/scaffold with name+version query", async () => {
+  it("migrationScaffold — POST /migrations/scaffold with name/version + optional up/down body", async () => {
     const transport = new FakeTransport()
     transport.setRequestResponse({ filename: "add_x.go", content: "package migrations" })
     const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
-    const res = await client.migrationScaffold("add_x", "202607010001")
+    const res = await client.migrationScaffold({
+      name: "add_x",
+      version: "202607010001",
+      up: ["CREATE TABLE x (id text)"],
+      down: ["DROP TABLE x"],
+    })
+    expect(transport.lastRequest?.method).toBe("POST")
     expect(transport.lastRequest?.path).toBe("http://localhost:9000/migrations/scaffold")
-    expect(transport.lastRequest?.query).toEqual({ name: "add_x", version: "202607010001" })
+    expect(transport.lastRequest?.body).toEqual({
+      name: "add_x",
+      version: "202607010001",
+      up: ["CREATE TABLE x (id text)"],
+      down: ["DROP TABLE x"],
+    })
     expect(res.filename).toBe("add_x.go")
   })
 

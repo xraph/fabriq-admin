@@ -9,7 +9,7 @@ import {
 import { migrationsPlugin } from "./index"
 
 function makeClient(caps: string[], opts?: { ddlError?: boolean }) {
-  const request = vi.fn(async (o: { path: string }) => {
+  const request = vi.fn(async (o: { path: string; body?: unknown }) => {
     const p = o.path
     if (p.endsWith("/meta")) {
       return { name: "fabriq-admin", version: "0", capabilities: caps }
@@ -21,9 +21,12 @@ function makeClient(caps: string[], opts?: { ddlError?: boolean }) {
       return { id: "j1", kind: "up", state: "done", names: ["outbox"], startedAt: "t" }
     }
     if (p.includes("/migrations/scaffold")) {
+      // Echo the supplied up statements so the test can assert they were sent.
+      const body = (o.body ?? {}) as { up?: string[]; down?: string[] }
+      const ups = (body.up ?? []).join("\n")
       return {
         filename: "migrations/0099_add_widget.go",
-        content: "package migrations\n\n// scaffolded add_widget",
+        content: `package migrations\n\n// scaffolded add_widget\n${ups}`,
       }
     }
     if (p.endsWith("/schema/ddl")) {
@@ -114,16 +117,26 @@ describe("MigrationsPage", () => {
     expect(screen.getByText("product")).toBeTruthy()
   })
 
-  it("Scaffold migration → generate → shows the generated Go file", async () => {
+  it("Scaffold migration → fill name + Up DDL → generate → shows the save-ready file", async () => {
     renderMigrations(["schema.admin"])
     await screen.findByText("202606120001")
     fireEvent.click(screen.getByRole("button", { name: /scaffold migration/i }))
-    // Dialog opens with a name field; fill it and generate.
+    // Dialog opens with name + Up/Down DDL fields.
     const nameInput = await screen.findByLabelText(/name \(slug\)/i)
     fireEvent.change(nameInput, { target: { value: "add_widget" } })
+    fireEvent.change(screen.getByLabelText(/up — forward ddl/i), {
+      target: { value: "CREATE TABLE widgets (id text)" },
+    })
     fireEvent.click(screen.getByRole("button", { name: /^generate$/i }))
     await screen.findByText("migrations/0099_add_widget.go")
-    expect(screen.getByText(/scaffolded add_widget/i)).toBeTruthy()
+    // The backend echoes the supplied Up statement into the generated <pre> →
+    // it round-tripped through the request body (scoped to <pre>, not the textarea).
+    const pre = screen.getByText(
+      (_, el) => el?.tagName === "PRE" && /CREATE TABLE widgets \(id text\)/.test(el.textContent ?? ""),
+    )
+    expect(pre).toBeTruthy()
+    // Download button appears once a file is generated.
+    expect(screen.getByRole("button", { name: /download \.go/i })).toBeTruthy()
   })
 
   it("Ad-hoc DDL panel renders behind the gate", async () => {
