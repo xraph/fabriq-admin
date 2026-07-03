@@ -11,6 +11,7 @@
 @source "../../../plugins/types/src";
 @source "../../../plugins/plugins-manager/src";
 @source "../../../plugins/telemetry/src";
+@source "../../../plugins/spatial/src";
 @source "../../../apps/remote-example/src";
 
 /* Host-app layout only (the admin library itself owns no global styles). */

@@ -107,5 +107,16 @@ export function SpatialMap({ center, radiusM, matches, onSelect }: SpatialMapPro
     }
   }, [center, radiusM, matches, onSelect])
 
-  return <div ref={containerRef} data-testid="spatial-map" className="h-[420px] w-full overflow-hidden rounded-md border border-border" />
+  // Height is an inline style (not an `h-[420px]` utility) so the map keeps its
+  // size even in a host that hasn't added this plugin's dir to Tailwind's
+  // @source scan — MapLibre reads the container height at init, and a collapsed
+  // container would render a 0-height map.
+  return (
+    <div
+      ref={containerRef}
+      data-testid="spatial-map"
+      style={{ height: 420 }}
+      className="w-full overflow-hidden rounded-md border border-border"
+    />
+  )
 }
