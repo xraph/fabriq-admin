@@ -20,7 +20,8 @@
   "dependencies": {
     "@fabriq-ai/admin-sdk": "workspace:*",
     "@fabriq-ai/ui": "workspace:*",
-    "lucide-react": "^0.456.0"
+    "lucide-react": "^0.456.0",
+    "maplibre-gl": "^4.7.1"
   },
   "devDependencies": {
     "react": "^19.0.0",

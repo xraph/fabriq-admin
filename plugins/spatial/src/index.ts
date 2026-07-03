@@ -10,4 +10,5 @@ export const spatialPlugin = definePlugin({
   routes: [{ path: "spatial", element: SpatialPage, title: "Spatial" }],
 })
 
-export { SpatialPage, SpatialMap } from "./SpatialPage"
+export { SpatialPage } from "./SpatialPage"
+export { SpatialMap } from "./SpatialMap"

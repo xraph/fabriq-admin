@@ -1259,21 +1259,24 @@ export class FabriqClient {
   // -------------------------------------------------------------------------
 
   /**
-   * POST /spatial/within — within-radius geo query.
+   * POST /spatial/within — radius geo query. Center is either an explicit
+   * `lng`/`lat` point OR an anchor asset via `centerId` (+ optional
+   * `centerEntity`, default = `entity`); the server resolves the anchor's
+   * geometry and excludes it. `filter` AND-s equality over the geometry meta
+   * (e.g. `{tag:"pump"}`). Returns nearest-first matches. `radiusM` is metres.
    *
-   * Body `{entity, lng, lat, radiusM, limit?}` → `{matches}` (nearest-first;
-   * each match carries its distance in metres and the point coordinates, plus
-   * the hydrated entity row when available). `radiusM` is metres.
-   *
-   * Surfaces backend failures as a thrown HttpTransportError so callers can
-   * inspect `.status` (e.g. 501 "spatial not configured", 400 missing fields).
+   * Throws HttpTransportError so callers can inspect `.status` (501 "spatial
+   * not configured", 400 missing fields / unknown centerId).
    */
   spatialWithin(body: {
     entity: string
-    lng: number
-    lat: number
+    lng?: number
+    lat?: number
+    centerId?: string
+    centerEntity?: string
     radiusM: number
     limit?: number
+    filter?: Record<string, string>
   }): Promise<SpatialResult> {
     return this.transport.request<SpatialResult>({
       method: "POST",

@@ -452,6 +452,30 @@ describe("FabriqClient", () => {
     ).rejects.toMatchObject({ status: 501 })
   })
 
+  it("spatialWithin posts centerId + filter through unchanged", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ matches: [] })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.spatialWithin({
+      entity: "equipment",
+      centerId: "plantA",
+      centerEntity: "site",
+      radiusM: 5000,
+      filter: { tag: "pump" },
+    })
+
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toMatch(/\/spatial\/within$/)
+    expect(transport.lastRequest?.body).toEqual({
+      entity: "equipment",
+      centerId: "plantA",
+      centerEntity: "site",
+      radiusM: 5000,
+      filter: { tag: "pump" },
+    })
+  })
+
   it("recall — POST /recall forwards the body and returns the pack", async () => {
     const transport = new FakeTransport()
     const pack = {
