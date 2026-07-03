@@ -28,3 +28,12 @@ if (typeof window !== "undefined" && !window.ResizeObserver) {
     value: ResizeObserver,
   })
 }
+
+// maplibre-gl (pulled in transitively via the spatial plugin's SpatialMap)
+// calls URL.createObjectURL at import time to set up its web worker; jsdom
+// ships neither it nor revokeObjectURL. The host smoke test never renders a
+// map, so a stub URL that satisfies the import is enough.
+if (typeof URL !== "undefined" && typeof URL.createObjectURL !== "function") {
+  URL.createObjectURL = () => "blob:jsdom-stub"
+  URL.revokeObjectURL = () => {}
+}
