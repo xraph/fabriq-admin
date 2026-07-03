@@ -6,9 +6,10 @@ import { spatialPlugin } from "./index"
 // MapLibre needs WebGL/canvas (absent in jsdom) — stub the whole module.
 vi.mock("maplibre-gl", () => {
   class Marker { setLngLat() { return this } addTo() { return this } remove() { return this } setPopup() { return this } getElement() { return document.createElement("div") } }
-  class Popup { setHTML() { return this } setLngLat() { return this } addTo() { return this } remove() { return this } }
+  class Popup { setHTML() { return this } setDOMContent() { return this } setLngLat() { return this } addTo() { return this } remove() { return this } }
   class Map {
     on(ev: string, cb: () => void) { if (ev === "load") cb(); return this }
+    off() {}
     addSource() {} addLayer() {} getSource() { return { setData() {} } } getLayer() { return undefined }
     removeLayer() {} removeSource() {} fitBounds() {} setCenter() {} remove() {} resize() {}
   }

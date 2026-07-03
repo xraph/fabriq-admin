@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import {
   useFabriqClient,
   usePluginHost,
@@ -63,9 +63,12 @@ export function SpatialPage() {
   const [error, setError] = useState<ErrState | null>(null)
   const [hint, setHint] = useState<string | null>(null)
 
-  function openMatch(m: SpatialMatch) {
-    navigate("entities/" + encodeURIComponent(form.entity.trim()) + "/" + encodeURIComponent(m.id))
-  }
+  const openMatch = useCallback(
+    (m: SpatialMatch) => {
+      navigate("entities/" + encodeURIComponent(form.entity.trim()) + "/" + encodeURIComponent(m.id))
+    },
+    [navigate, form.entity],
+  )
   function findNearThis(m: SpatialMatch) {
     set({ mode: "asset", assetId: m.id, assetEntity: form.entity })
   }

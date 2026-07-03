@@ -85,7 +85,9 @@ export function SpatialMap({ center, radiusM, matches, onSelect }: SpatialMapPro
         if (m.lng === undefined || m.lat === undefined) return
         const marker = new maplibregl.Marker({ color: colorForRank(i, matches.length) }).setLngLat([m.lng, m.lat])
         const name = String((m.data?.name as string) ?? m.id)
-        const popup = new maplibregl.Popup({ offset: 24 }).setHTML(`<strong>${name}</strong>`)
+        const el = document.createElement("strong")
+        el.textContent = name
+        const popup = new maplibregl.Popup({ offset: 24 }).setDOMContent(el)
         marker.setPopup(popup)
         marker.getElement().addEventListener("click", () => onSelect(m))
         marker.addTo(map)
@@ -95,8 +97,14 @@ export function SpatialMap({ center, radiusM, matches, onSelect }: SpatialMapPro
 
       if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 60, maxZoom: 13, duration: 400 })
     }
-    if (readyRef.current) draw()
-    else map.on("load", draw)
+    if (readyRef.current) {
+      draw()
+      return
+    }
+    map.on("load", draw)
+    return () => {
+      map.off("load", draw)
+    }
   }, [center, radiusM, matches, onSelect])
 
   return <div ref={containerRef} data-testid="spatial-map" className="h-[420px] w-full overflow-hidden rounded-md border border-border" />
