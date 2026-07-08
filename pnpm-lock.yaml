@@ -295,6 +295,28 @@ importers:
         specifier: ^1.0.0
         version: 1.4.0
 
+  plugins/analytics:
+    dependencies:
+      '@fabriq-ai/admin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/admin-sdk
+      '@fabriq-ai/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      lucide-react:
+        specifier: ^0.456.0
+        version: 0.456.0(react@19.2.7)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.7(react@19.2.7)
+
   plugins/api-console:
     dependencies:
       '@fabriq-ai/admin-sdk':

@@ -1,0 +1,30 @@
+{
+  "name": "@fabriq-ai/plugin-analytics",
+  "version": "0.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xraph/fabriq-admin.git",
+    "directory": "plugins/analytics"
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "@fabriq-ai/admin-sdk": "workspace:*",
+    "@fabriq-ai/ui": "workspace:*",
+    "lucide-react": "^0.456.0"
+  },
+  "devDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@types/react": "^19.0.0"
+  }
+}
