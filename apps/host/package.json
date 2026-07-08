@@ -30,6 +30,7 @@
     "@fabriq-ai/plugin-search": "workspace:*",
     "@fabriq-ai/plugin-spatial": "workspace:*",
     "@fabriq-ai/plugin-telemetry": "workspace:*",
+    "@fabriq-ai/plugin-tenants": "workspace:*",
     "@fabriq-ai/plugin-types": "workspace:*",
     "@fabriq-ai/ui": "workspace:*",
     "react": "^19.0.0",

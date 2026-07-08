@@ -40,6 +40,9 @@ Live API connection status, the exact capability set the backend advertises, the
 
 ![Overview](docs/screenshots/01-overview.png)
 
+### Tenants — catalog mode (database‑per‑tenant)
+List the tenant catalog with lifecycle state badges (pending/creating/migrating/active/suspended/failed), cluster, database, and schema version. Provision a tenant and live‑follow the async job over SSE until it is active, migrate the whole fleet with live progress, and suspend/resume individual tenants. Each tenant's detail view shows its placement plus a connection‑info panel for the underlying database and connected stores (Postgres/Redis/FalkorDB/Elasticsearch/blob) — host, port, database, username, SSL, cluster, pool occupancy, and health. Passwords are redacted by the backend and rendered as a masked placeholder; there is no reveal.
+
 ### Entities — schema‑aware CRUD
 Browse any registered entity type, page through instances, open a detail view, and create/update/delete — the grid columns are derived from the type's schema.
 
@@ -208,9 +211,10 @@ fabriq-admin/
 ├── packages/
 │   ├── admin-sdk/            @fabriq-ai/admin-sdk      — <FabriqAdmin>, plugin system, client, transport, router, tenant
 │   └── ui/                   @fabriq-ai/ui             — Base UI + shadcn components, scoped Tailwind v4 theme
-└── plugins/                  17 builtin feature plugins
-    ├── overview  entity-browser  search  recall  live  graph  spatial
-    ├── telemetry  events  projections  cache  files  crdt  distill
+└── plugins/                  builtin feature plugins
+    ├── overview  entity-browser  tenants  types  search  recall  live
+    ├── graph  spatial  telemetry  events  projections  query  migrations
+    ├── cache  files  crdt  distill  connection
     └── commands  api-console  plugins-manager
 ```
 

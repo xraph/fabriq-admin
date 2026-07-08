@@ -22,6 +22,7 @@ import { eventsPlugin } from "@fabriq-ai/plugin-events"
 import { projectionsPlugin } from "@fabriq-ai/plugin-projections"
 import { queryPlugin } from "@fabriq-ai/plugin-query"
 import { migrationsPlugin } from "@fabriq-ai/plugin-migrations"
+import { tenantsPlugin } from "@fabriq-ai/plugin-tenants"
 import { cachePlugin } from "@fabriq-ai/plugin-cache"
 import { filesPlugin } from "@fabriq-ai/plugin-files"
 import { crdtPlugin } from "@fabriq-ai/plugin-crdt"
@@ -52,6 +53,7 @@ const tenantStore = createTenantStore()
 const plugins = [
   overviewPlugin,
   entityBrowserPlugin,
+  tenantsPlugin,
   typesPlugin,
   searchPlugin,
   recallPlugin,

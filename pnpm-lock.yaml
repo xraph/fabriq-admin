@@ -89,6 +89,9 @@ importers:
       '@fabriq-ai/plugin-telemetry':
         specifier: workspace:*
         version: link:../../plugins/telemetry
+      '@fabriq-ai/plugin-tenants':
+        specifier: workspace:*
+        version: link:../../plugins/tenants
       '@fabriq-ai/plugin-types':
         specifier: workspace:*
         version: link:../../plugins/types
@@ -732,6 +735,28 @@ importers:
         version: 19.2.7(react@19.2.7)
 
   plugins/telemetry:
+    dependencies:
+      '@fabriq-ai/admin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/admin-sdk
+      '@fabriq-ai/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      lucide-react:
+        specifier: ^0.456.0
+        version: 0.456.0(react@19.2.7)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.7(react@19.2.7)
+
+  plugins/tenants:
     dependencies:
       '@fabriq-ai/admin-sdk':
         specifier: workspace:*

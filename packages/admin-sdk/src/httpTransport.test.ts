@@ -387,6 +387,30 @@ describe("createHttpTransport – stream", () => {
     expect(headers["Accept"]).toBe("text/event-stream")
     expect(headers["Content-Type"]).toBe("application/json")
   })
+
+  it("supports a GET subscription with no body and no Content-Type", async () => {
+    const sseText = "data: {\"state\":\"done\"}\n\n"
+    const fetchImpl = vi.fn().mockResolvedValue(makeStreamResponse([sseText]))
+    const transport = createHttpTransport({
+      baseUrl: "http://api.example.com",
+      getHeaders: () => ({ "X-Tenant-ID": "acme" }),
+      fetchImpl,
+    })
+
+    const results: unknown[] = []
+    for await (const event of transport.stream({ method: "GET", path: "/tenants/jobs/j1/stream" })) {
+      results.push(event)
+    }
+
+    expect(results).toEqual([{ state: "done" }])
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    expect((init as RequestInit).method).toBe("GET")
+    expect((init as RequestInit).body).toBeUndefined()
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers["Accept"]).toBe("text/event-stream")
+    expect(headers["Content-Type"]).toBeUndefined()
+    expect(headers["X-Tenant-ID"]).toBe("acme")
+  })
 })
 
 // ---------------------------------------------------------------------------

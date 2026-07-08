@@ -211,6 +211,7 @@ export function createHttpTransport({
   // -------------------------------------------------------------------------
 
   async function* stream(opts: {
+    method?: string
     path: string
     body?: unknown
     signal?: AbortSignal
@@ -220,16 +221,27 @@ export function createHttpTransport({
       url = base + url
     }
 
+    const method = opts.method ?? "POST"
+    const hasBody = opts.body !== undefined
+    // A GET SSE subscription (e.g. the tenant job stream) carries no body and no
+    // JSON Content-Type; POST streams keep the JSON Content-Type as before.
+    const sendsJson = method.toUpperCase() !== "GET"
     const dynamicHeadersStream = getHeaders ? getHeaders() : {}
     const res = await _fetch(url, {
-      method: "POST",
-      headers: {
-        ...defaultHeaders,
-        ...dynamicHeadersStream,
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-      },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      method,
+      headers: sendsJson
+        ? {
+            ...defaultHeaders,
+            ...dynamicHeadersStream,
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          }
+        : {
+            ...defaultHeaders,
+            ...dynamicHeadersStream,
+            Accept: "text/event-stream",
+          },
+      body: hasBody ? JSON.stringify(opts.body) : undefined,
       signal: opts.signal,
     })
 

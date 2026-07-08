@@ -1045,3 +1045,172 @@ describe("FabriqClient", () => {
     expect(transport.lastRequest?.path).toBe("http://localhost:9000/logout")
   })
 })
+
+// ---------------------------------------------------------------------------
+// Tenant catalog (database-per-tenant "catalog mode")
+// ---------------------------------------------------------------------------
+
+describe("FabriqClient — tenants", () => {
+  it("listTenants — GET /tenants, tolerates an {items} envelope", async () => {
+    const transport = new FakeTransport()
+    const items = [
+      { tenantId: "acme", clusterId: "c1", database: "tnt_acme", state: "active", version: 3 },
+    ]
+    transport.setRequestResponse({ items })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.listTenants()
+
+    expect(result).toEqual(items)
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/tenants")
+  })
+
+  it("listTenants — tolerates a bare array response", async () => {
+    const transport = new FakeTransport()
+    const items = [
+      { tenantId: "beta", clusterId: "c2", database: "tnt_beta", state: "pending", version: 0 },
+    ]
+    transport.setRequestResponse(items)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    expect(await client.listTenants()).toEqual(items)
+  })
+
+  it("getTenant — GET /tenants/:id (encoded)", async () => {
+    const transport = new FakeTransport()
+    const detail = {
+      tenantId: "a/c me",
+      state: "active",
+      version: 5,
+      placement: { clusterId: "c1", database: "tnt_acme" },
+    }
+    transport.setRequestResponse(detail)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.getTenant("a/c me")
+
+    expect(result).toEqual(detail)
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/tenants/a%2Fc%20me")
+  })
+
+  it("provisionTenant — POST /tenants with {tenantId,clusterId} → {jobId}", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ jobId: "job_1" })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.provisionTenant({ tenantId: "acme", clusterId: "c1" })
+
+    expect(result).toEqual({ jobId: "job_1" })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/tenants")
+    expect(transport.lastRequest?.body).toEqual({ tenantId: "acme", clusterId: "c1" })
+  })
+
+  it("migrateAllTenants — POST /tenants/migrate-all → {jobId}", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ jobId: "job_fleet" })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.migrateAllTenants()
+
+    expect(result).toEqual({ jobId: "job_fleet" })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/tenants/migrate-all")
+  })
+
+  it("tenantJob — GET /tenants/jobs/:id", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ id: "job_1", kind: "provision", state: "running" })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.tenantJob("job_1")
+
+    expect(result).toMatchObject({ id: "job_1", state: "running" })
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/tenants/jobs/job_1")
+  })
+
+  it("tenantJobStream — GET SSE at /tenants/jobs/:id/stream, yields job events", async () => {
+    const transport = new FakeTransport()
+    const events = [
+      { id: "job_1", kind: "provision", state: "running", message: "creating db" },
+      { id: "job_1", kind: "provision", state: "done", tenantId: "acme" },
+    ]
+    transport.setStreamEvents(events)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const collected: unknown[] = []
+    for await (const ev of client.tenantJobStream("job_1")) collected.push(ev)
+
+    expect(collected).toEqual(events)
+    expect(transport.lastStream?.method).toBe("GET")
+    expect(transport.lastStream?.path).toBe("http://localhost:9000/tenants/jobs/job_1/stream")
+    // GET subscription carries no request body.
+    expect(transport.lastStream?.body).toBeUndefined()
+  })
+
+  it("suspendTenant / resumeTenant — POST /tenants/:id/(suspend|resume)", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({
+      tenantId: "acme",
+      state: "suspended",
+      version: 3,
+      placement: { clusterId: "c1", database: "tnt_acme" },
+    })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+
+    await client.suspendTenant("acme")
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/tenants/acme/suspend")
+
+    await client.resumeTenant("acme")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/tenants/acme/resume")
+  })
+
+  it("tenantConnection — GET /tenants/:id/connection", async () => {
+    const transport = new FakeTransport()
+    const info = {
+      tenantId: "acme",
+      database: {
+        kind: "postgres",
+        host: "pg-1",
+        port: 5432,
+        database: "tnt_acme",
+        username: "app",
+        sslMode: "require",
+        clusterId: "c1",
+        health: "healthy",
+      },
+      stores: [],
+    }
+    transport.setRequestResponse(info)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.tenantConnection("acme")
+
+    expect(result).toEqual(info)
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/tenants/acme/connection")
+    // The wire type carries no password field — nothing to leak.
+    expect("password" in (result.database as Record<string, unknown>)).toBe(false)
+  })
+
+  it("tenantConnection — surfaces a 404 (endpoint not yet mounted) as a thrown error", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestError(new HttpTransportError(404, "not found"))
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await expect(client.tenantConnection("acme")).rejects.toMatchObject({ status: 404 })
+  })
+
+  it("listConnections — GET /connections", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ stores: [{ kind: "redis", host: "redis-1", port: 6379 }] })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const result = await client.listConnections()
+
+    expect(result.stores).toHaveLength(1)
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/connections")
+  })
+})

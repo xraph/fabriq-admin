@@ -20,6 +20,7 @@ import {
   DatabaseZap,
   Layers,
   Database,
+  Building2,
   type LucideIcon,
 } from "lucide-react"
 
@@ -80,6 +81,9 @@ export function resolveIcon(name?: string): LucideIcon {
       return Database
     case "migrations":
       return Layers
+    case "tenants":
+    case "tenant":
+      return Building2
     default:
       return Circle
   }

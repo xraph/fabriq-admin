@@ -20,6 +20,8 @@ export interface FabriqTransport {
   rawRequest(opts: RawRequestOptions): Promise<RawResponse>
 
   stream(opts: {
+    /** HTTP method for the SSE request. Defaults to POST (event stream via POST). */
+    method?: string
     path: string
     body?: unknown
     signal?: AbortSignal
@@ -770,6 +772,147 @@ export interface RecallRequest {
   budget?: number
   k?: number
   hops?: number
+}
+
+// ---------------------------------------------------------------------------
+// Tenant catalog (database-per-tenant / "catalog mode") types
+//
+// Backed by adminapi's `tenants.admin` capability (WithTenantsAdmin()).
+// ---------------------------------------------------------------------------
+
+/**
+ * Lifecycle state of a catalog tenant. Kept as a union of the known states but
+ * consumers should tolerate an unknown string for forward-compat.
+ */
+export type TenantState =
+  | "pending"
+  | "creating"
+  | "migrating"
+  | "active"
+  | "suspended"
+  | "failed"
+
+/** One row of the tenant catalog (GET /tenants). */
+export interface TenantSummary {
+  tenantId: string
+  clusterId: string
+  database: string
+  state: TenantState
+  /** Schema/migration version the tenant's database is at. */
+  version: number
+}
+
+/** Where a tenant's database physically lives. */
+export interface TenantPlacement {
+  clusterId: string
+  database: string
+}
+
+/** One tenant's full record (GET /tenants/:id). */
+export interface TenantDetail {
+  tenantId: string
+  state: TenantState
+  version: number
+  placement: TenantPlacement
+}
+
+/** Kind of async tenant job. */
+export type TenantJobKind = "provision" | "migrate-all"
+
+/** Running-or-terminal state of a tenant job. */
+export type TenantJobState = "running" | "done" | "failed"
+
+/**
+ * Progress of an async tenant job (provision / fleet migration). Streamed over
+ * SSE (GET /tenants/jobs/:id/stream) and pollable (GET /tenants/jobs/:id).
+ * A fleet migration carries `total`/`completed` counts; a provision carries the
+ * `tenantId`. Left open-ended so backend progress additions don't break the client.
+ */
+export interface TenantJob {
+  id: string
+  kind: TenantJobKind
+  state: TenantJobState
+  /** Provision: the tenant being created. */
+  tenantId?: string
+  /** Latest human-readable progress line. */
+  message?: string
+  /** Fleet migration: total tenants to migrate. */
+  total?: number
+  /** Fleet migration: tenants migrated so far. */
+  completed?: number
+  error?: string
+  startedAt?: string
+  endedAt?: string
+}
+
+// ---------------------------------------------------------------------------
+// Tenant connection / store topology types
+//
+// Provided by the connection-info surface of adminapi
+// (GET /tenants/:id/connection, GET /connections). A backend that has not yet
+// mounted them surfaces the call as a 404/501 (thrown HttpTransportError), and
+// the UI degrades to a "not available" state.
+//
+// SECURITY: the backend NEVER transmits store passwords. There is intentionally
+// NO password field on any type below — the UI renders a fixed masked
+// placeholder and offers no reveal affordance.
+// ---------------------------------------------------------------------------
+
+/** Store family for a connection endpoint. Open-ended for forward-compat. */
+export type StoreKind =
+  | "postgres"
+  | "redis"
+  | "falkordb"
+  | "elasticsearch"
+  | "blob"
+  | string
+
+/** Health band for a store endpoint. Open-ended for forward-compat. */
+export type StoreHealth = "healthy" | "degraded" | "down" | "unknown" | string
+
+/** Connection-pool occupancy for a store endpoint. */
+export interface PoolStats {
+  inUse?: number
+  idle?: number
+  size?: number
+  max?: number
+}
+
+/**
+ * A single connectable endpoint — a tenant's database or a shared backing store.
+ * Carries everything needed to identify and connect EXCEPT the password, which
+ * the backend redacts and never sends.
+ */
+export interface StoreEndpoint {
+  kind: StoreKind
+  /** Optional role/label, e.g. "primary", "replica", "cache". */
+  label?: string
+  host: string
+  port?: number
+  database?: string
+  username?: string
+  /** e.g. "require", "verify-full", "disable". */
+  sslMode?: string
+  clusterId?: string
+  pool?: PoolStats
+  health?: StoreHealth
+}
+
+/**
+ * A tenant's database placement plus the stores it is wired to
+ * (GET /tenants/:id/connection).
+ */
+export interface TenantConnectionInfo {
+  tenantId: string
+  /** The tenant's own (per-tenant) database endpoint. */
+  database: StoreEndpoint
+  /** Shared/backing stores this tenant uses (redis, falkordb, es, blob, …). */
+  stores: StoreEndpoint[]
+}
+
+/** Fleet-wide store topology (GET /connections). */
+export interface ConnectionsTopology {
+  stores: StoreEndpoint[]
 }
 
 // ---------------------------------------------------------------------------
@@ -1732,6 +1875,123 @@ export class FabriqClient {
     return this.transport.request<{ revoked: boolean }>({
       method: "DELETE",
       path: `${this.baseUrl}/keys/${encodeURIComponent(id)}`,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Tenant catalog (database-per-tenant "catalog mode")
+  //
+  // Gated by the `tenants.admin` capability (WithTenantsAdmin()). Provision and
+  // fleet-migration are async (202 + jobId); poll or SSE-follow the job.
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /tenants — list the tenant catalog. Tolerates both an envelope
+   * (`{items}`) and a bare array. A backend without the tenants.admin capability
+   * surfaces as a thrown HttpTransportError (404/501).
+   */
+  async listTenants(): Promise<TenantSummary[]> {
+    const res = await this.transport.request<{ items?: TenantSummary[] } | TenantSummary[]>({
+      method: "GET",
+      path: `${this.baseUrl}/tenants`,
+    })
+    return Array.isArray(res) ? res : (res?.items ?? [])
+  }
+
+  /** GET /tenants/:id — one tenant's state, version, and placement. */
+  getTenant(id: string): Promise<TenantDetail> {
+    return this.transport.request<TenantDetail>({
+      method: "GET",
+      path: `${this.baseUrl}/tenants/${encodeURIComponent(id)}`,
+    })
+  }
+
+  /**
+   * POST /tenants — provision a new tenant database (async). Returns the job id
+   * to follow via `tenantJobStream`/`tenantJob`. 202 on the backend.
+   */
+  provisionTenant(input: { tenantId: string; clusterId: string }): Promise<{ jobId: string }> {
+    return this.transport.request<{ jobId: string }>({
+      method: "POST",
+      path: `${this.baseUrl}/tenants`,
+      body: input,
+    })
+  }
+
+  /**
+   * POST /tenants/migrate-all — migrate every tenant in the fleet to the latest
+   * schema (async). Returns the job id to follow. 202 on the backend.
+   */
+  migrateAllTenants(): Promise<{ jobId: string }> {
+    return this.transport.request<{ jobId: string }>({
+      method: "POST",
+      path: `${this.baseUrl}/tenants/migrate-all`,
+      body: {},
+    })
+  }
+
+  /** GET /tenants/jobs/:id — poll one tenant job's progress. */
+  tenantJob(id: string): Promise<TenantJob> {
+    return this.transport.request<TenantJob>({
+      method: "GET",
+      path: `${this.baseUrl}/tenants/jobs/${encodeURIComponent(id)}`,
+    })
+  }
+
+  /**
+   * GET /tenants/jobs/:id/stream (SSE) — live-follow a tenant job's progress.
+   * Yields a TenantJob per progress event until the job reaches a terminal
+   * state. Pass an AbortSignal to stop following (unmount / navigation). Uses a
+   * GET SSE subscription (no request body).
+   */
+  tenantJobStream(id: string, signal?: AbortSignal): AsyncIterable<TenantJob> {
+    return this.transport.stream({
+      method: "GET",
+      path: `${this.baseUrl}/tenants/jobs/${encodeURIComponent(id)}/stream`,
+      signal,
+    }) as AsyncIterable<TenantJob>
+  }
+
+  /** POST /tenants/:id/suspend — suspend an active tenant. Returns the updated record. */
+  suspendTenant(id: string): Promise<TenantDetail> {
+    return this.transport.request<TenantDetail>({
+      method: "POST",
+      path: `${this.baseUrl}/tenants/${encodeURIComponent(id)}/suspend`,
+      body: {},
+    })
+  }
+
+  /** POST /tenants/:id/resume — resume a suspended tenant. Returns the updated record. */
+  resumeTenant(id: string): Promise<TenantDetail> {
+    return this.transport.request<TenantDetail>({
+      method: "POST",
+      path: `${this.baseUrl}/tenants/${encodeURIComponent(id)}/resume`,
+      body: {},
+    })
+  }
+
+  /**
+   * GET /tenants/:id/connection — the tenant's database placement plus the
+   * stores it is wired to. Part of the connection-info surface; a backend that
+   * has not mounted it yet surfaces as a thrown HttpTransportError (404/501),
+   * which callers handle as "not available". Passwords are never included.
+   */
+  tenantConnection(id: string): Promise<TenantConnectionInfo> {
+    return this.transport.request<TenantConnectionInfo>({
+      method: "GET",
+      path: `${this.baseUrl}/tenants/${encodeURIComponent(id)}/connection`,
+    })
+  }
+
+  /**
+   * GET /connections — fleet-wide store topology (Postgres clusters, Redis,
+   * FalkorDB, Elasticsearch, blob). Same availability caveat as
+   * `tenantConnection`. Passwords are never included.
+   */
+  listConnections(): Promise<ConnectionsTopology> {
+    return this.transport.request<ConnectionsTopology>({
+      method: "GET",
+      path: `${this.baseUrl}/connections`,
     })
   }
 
