@@ -1,6 +1,14 @@
-import { useState } from "react"
-import { useFabriqQuery, HttpTransportError, type AnalyticsStatus } from "@fabriq-ai/admin-sdk"
-import { Button, Badge, Alert, AlertTitle, AlertDescription } from "@fabriq-ai/ui"
+import { useState, useRef, useEffect } from "react"
+import {
+  useFabriqClient,
+  useFabriqQuery,
+  HttpTransportError,
+  type AnalyticsStatus,
+  type AnalyticsJob,
+  type AnalyticsBackfillResult,
+  type AnalyticsReconcileResult,
+} from "@fabriq-ai/admin-sdk"
+import { Button, Badge, Alert, AlertTitle, AlertDescription, Input } from "@fabriq-ai/ui"
 
 type Tab = "freshness" | "operations" | "privacy"
 
@@ -130,10 +138,136 @@ function FreshnessTab() {
   )
 }
 
-// OperationsTab and PrivacyTab are added in Tasks 3 and 4. For this task, stub them:
+type SyncResult =
+  | { op: "backfill"; res: AnalyticsBackfillResult }
+  | { op: "reconcile"; res: AnalyticsReconcileResult }
+
 function OperationsTab() {
-  return null
+  const client = useFabriqClient()
+  const [tenant, setTenant] = useState("")
+  const [all, setAll] = useState(false)
+  const [job, setJob] = useState<AnalyticsJob | null>(null)
+  const [result, setResult] = useState<SyncResult | null>(null)
+  const [runErr, setRunErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  // Stop polling if the page unmounts (tab switch / navigation).
+  const mounted = useRef(true)
+  useEffect(() => () => { mounted.current = false }, [])
+
+  // Poll a job until it reaches a terminal state, bounded so a stuck job never
+  // pins the UI forever (~3 min at 800ms) — on timeout we surface an error.
+  const maxPolls = 225
+  async function pollJob(id: string) {
+    for (let i = 0; i < maxPolls && mounted.current; i++) {
+      const j = await client.analyticsJob(id)
+      if (!mounted.current) return
+      setJob(j)
+      if (j.state !== "running") return
+      await new Promise((r) => setTimeout(r, 800))
+    }
+    if (mounted.current) {
+      setRunErr("Job still running after the poll window — check the backend for its final state.")
+    }
+  }
+
+  async function run(op: "backfill" | "reconcile") {
+    if (!all && !tenant.trim()) {
+      setRunErr("Enter a tenant id or select all tenants.")
+      return
+    }
+    setRunErr(null)
+    setJob(null)
+    setResult(null)
+    setBusy(true)
+    try {
+      const req = all ? { all: true, async: true } : { tenant: tenant.trim() }
+      if (op === "backfill") {
+        const res = await client.analyticsBackfill(req)
+        if (res.jobId) {
+          await pollJob(res.jobId)
+        } else if (mounted.current) {
+          setResult({ op: "backfill", res })
+        }
+      } else {
+        const res = await client.analyticsReconcile(req)
+        if (res.jobId) {
+          await pollJob(res.jobId)
+        } else if (mounted.current) {
+          setResult({ op: "reconcile", res })
+        }
+      }
+    } catch (e) {
+      setRunErr(errMsg(e))
+    } finally {
+      if (mounted.current) setBusy(false)
+    }
+  }
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder="tenant id"
+          value={tenant}
+          disabled={all}
+          onChange={(e) => setTenant(e.target.value)}
+          className="max-w-xs"
+        />
+        <label className="flex items-center gap-1 text-sm">
+          <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> all tenants
+        </label>
+        <Button size="sm" disabled={busy} onClick={() => run("backfill")}>
+          Backfill
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => run("reconcile")}>
+          Reconcile
+        </Button>
+      </div>
+
+      {runErr && (
+        <Alert variant="destructive">
+          <AlertTitle>Operation failed</AlertTitle>
+          <AlertDescription className="font-mono text-xs">{runErr}</AlertDescription>
+        </Alert>
+      )}
+
+      {job && (
+        <Alert variant={job.state === "failed" ? "destructive" : "default"}>
+          <AlertTitle>
+            {job.kind} — {job.state}
+          </AlertTitle>
+          <AlertDescription className="font-mono text-xs">
+            {job.state === "failed" ? job.error : job.state === "done" ? "complete" : "running…"}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {result && (
+        <Alert>
+          <AlertTitle>{result.op} complete</AlertTitle>
+          <AlertDescription className="font-mono text-xs">
+            {result.op === "backfill" ? (
+              result.res.error ? (
+                result.res.error
+              ) : (
+                Object.entries(result.res.counts ?? {})
+                  .map(([t, n]) => `${t}: ${n}`)
+                  .join(", ") || "(no tenants)"
+              )
+            ) : result.res.error ? (
+              result.res.error
+            ) : (
+              Object.entries(result.res.reports ?? {})
+                .map(([t, r]) => `${t}: checked=${r.checked} missing=${r.missing} stale=${r.stale} healed=${r.healed}`)
+                .join(" | ") || "(no tenants)"
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  )
 }
+
 function PrivacyTab() {
   return null
 }
