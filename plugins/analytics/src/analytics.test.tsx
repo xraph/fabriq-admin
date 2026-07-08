@@ -8,7 +8,7 @@ import {
 } from "@fabriq-ai/admin-sdk"
 import { analyticsPlugin } from "./index"
 
-function makeClient(caps: string[], status?: Partial<AnalyticsStatus>) {
+function makeClient(caps: string[], status?: Partial<AnalyticsStatus>, job?: unknown) {
   const request = vi.fn(async (o: { path: string; body?: unknown }) => {
     const p = o.path
     if (p.endsWith("/meta")) {
@@ -30,7 +30,7 @@ function makeClient(caps: string[], status?: Partial<AnalyticsStatus>) {
       return { counts: { [body.tenant ?? "acme"]: 3 } }
     }
     if (p.includes("/analytics/jobs/")) {
-      return { id: "j1", kind: "backfill", state: "done", startedAt: "" }
+      return job ?? { id: "j1", kind: "backfill", state: "done", startedAt: "" }
     }
     if (p.endsWith("/analytics/purge")) {
       const body = (o.body ?? {}) as { tenant?: string }
@@ -51,9 +51,9 @@ function makeClient(caps: string[], status?: Partial<AnalyticsStatus>) {
   return new FabriqClient({ baseUrl: "http://test", transport })
 }
 
-function renderAnalytics(caps: string[], status?: Partial<AnalyticsStatus>) {
+function renderAnalytics(caps: string[], status?: Partial<AnalyticsStatus>, job?: unknown) {
   return render(
-    <FabriqAdmin client={makeClient(caps, status)} plugins={[analyticsPlugin]} loadRemote={vi.fn()} initialPath="analytics" />,
+    <FabriqAdmin client={makeClient(caps, status, job)} plugins={[analyticsPlugin]} loadRemote={vi.fn()} initialPath="analytics" />,
   )
 }
 
@@ -105,6 +105,23 @@ describe("AnalyticsPage — Operations", () => {
     // Synchronous result (no jobId) → an Alert summarizing counts, not a job poll banner.
     await screen.findByText(/acme/i)
     expect(screen.getByText(/3/)).toBeTruthy()
+  })
+
+  it("surfaces a partial-failure job.result.error instead of a flat 'complete'", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"], undefined, {
+      id: "j1",
+      kind: "backfill",
+      state: "done",
+      result: { error: "tenant acme: boom" },
+      startedAt: "",
+    })
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    // The async job reached state:"done" but carried a per-tenant failure in
+    // its result — that text must be shown, and a bare "complete" must not.
+    await screen.findByText(/tenant acme: boom/i)
+    expect(screen.queryByText(/^complete$/i)).toBeNull()
   })
 })
 

@@ -243,16 +243,29 @@ function OperationsTab() {
         </Alert>
       )}
 
-      {job && (
-        <Alert variant={job.state === "failed" ? "destructive" : "default"}>
-          <AlertTitle>
-            {job.kind} — {job.state}
-          </AlertTitle>
-          <AlertDescription className="font-mono text-xs">
-            {job.state === "failed" ? job.error : job.state === "done" ? "complete" : "running…"}
-          </AlertDescription>
-        </Alert>
-      )}
+      {job && (() => {
+        // The backend reports state:"done" for a fleet op even when some
+        // tenants failed — the per-tenant failure text lives in
+        // job.result.error. Surface that instead of a flat "complete" so a
+        // partial failure isn't hidden behind a green status (parity with
+        // the sync-result rendering below, which already checks res.error).
+        const jobErr = (job.result as { error?: string } | undefined)?.error
+        const failed = job.state === "failed" || (job.state === "done" && !!jobErr)
+        return (
+          <Alert variant={failed ? "destructive" : "default"}>
+            <AlertTitle>
+              {job.kind} — {job.state}
+            </AlertTitle>
+            <AlertDescription className="font-mono text-xs">
+              {job.state === "failed"
+                ? job.error
+                : job.state === "done"
+                  ? jobErr ?? "complete"
+                  : "running…"}
+            </AlertDescription>
+          </Alert>
+        )
+      })()}
 
       {result && (
         <Alert>
