@@ -8,7 +8,19 @@ import {
   type AnalyticsBackfillResult,
   type AnalyticsReconcileResult,
 } from "@fabriq-ai/admin-sdk"
-import { Button, Badge, Alert, AlertTitle, AlertDescription, Input } from "@fabriq-ai/ui"
+import {
+  Button,
+  Badge,
+  Alert,
+  AlertTitle,
+  AlertDescription,
+  Input,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@fabriq-ai/ui"
 
 type Tab = "freshness" | "operations" | "privacy"
 
@@ -269,5 +281,93 @@ function OperationsTab() {
 }
 
 function PrivacyTab() {
-  return null
+  const client = useFabriqClient()
+  const [tenant, setTenant] = useState("")
+  const [op, setOp] = useState<null | "reproject" | "purge">(null)
+  const [confirmText, setConfirmText] = useState("")
+  const [result, setResult] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  function open(o: "reproject" | "purge") {
+    if (!tenant.trim()) {
+      setErr("Enter a tenant id first.")
+      return
+    }
+    setErr(null)
+    setResult(null)
+    setConfirmText("")
+    setOp(o)
+  }
+
+  async function confirm() {
+    if (!op || confirmText !== tenant.trim()) return
+    setBusy(true)
+    setErr(null)
+    try {
+      if (op === "purge") {
+        const r = await client.analyticsPurge({ tenant: tenant.trim() })
+        setResult(`Purged ${r.rowsDeleted} rows for ${r.tenant}.`)
+      } else {
+        const t = tenant.trim()
+        const r = await client.analyticsReproject({ tenant: t })
+        setResult(`Reprojected ${r.counts?.[t] ?? 0} rows for ${t}.`)
+      }
+      setOp(null)
+    } catch (e) {
+      setErr(errMsg(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const confirmed = confirmText === tenant.trim() && tenant.trim() !== ""
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder="tenant id"
+          value={tenant}
+          onChange={(e) => setTenant(e.target.value)}
+          className="max-w-xs"
+        />
+        <Button size="sm" variant="outline" onClick={() => open("reproject")}>
+          Reproject…
+        </Button>
+        <Button size="sm" variant="destructive" onClick={() => open("purge")}>
+          Purge…
+        </Button>
+      </div>
+      {err && (
+        <Alert variant="destructive">
+          <AlertTitle>Failed</AlertTitle>
+          <AlertDescription className="font-mono text-xs">{err}</AlertDescription>
+        </Alert>
+      )}
+      {result && (
+        <Alert>
+          <AlertTitle>Done</AlertTitle>
+          <AlertDescription>{result}</AlertDescription>
+        </Alert>
+      )}
+      <Dialog open={op !== null} onOpenChange={(o) => !o && setOp(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{op === "purge" ? "Erase tenant analytics data" : "Reproject tenant payloads"}</DialogTitle>
+            <DialogDescription>
+              {op === "purge"
+                ? `This IRREVERSIBLY deletes all analytics facts, events, and watermarks for "${tenant.trim()}".`
+                : `This re-applies the current redaction allow-list to all stored rows for "${tenant.trim()}".`}
+              {" "}
+              Type the tenant id to confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <Input placeholder={tenant.trim()} value={confirmText} onChange={(e) => setConfirmText(e.target.value)} />
+          <Button variant={op === "purge" ? "destructive" : "default"} disabled={!confirmed || busy} onClick={confirm}>
+            {op === "purge" ? "Erase" : "Reproject"}
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
 }

@@ -32,6 +32,14 @@ function makeClient(caps: string[], status?: Partial<AnalyticsStatus>) {
     if (p.includes("/analytics/jobs/")) {
       return { id: "j1", kind: "backfill", state: "done", startedAt: "" }
     }
+    if (p.endsWith("/analytics/purge")) {
+      const body = (o.body ?? {}) as { tenant?: string }
+      return { tenant: body.tenant ?? "acme", rowsDeleted: 42 }
+    }
+    if (p.endsWith("/analytics/reproject")) {
+      const body = (o.body ?? {}) as { tenant?: string }
+      return { counts: { [body.tenant ?? "acme"]: 7 } }
+    }
     return {}
   })
   const transport = {
@@ -97,5 +105,41 @@ describe("AnalyticsPage — Operations", () => {
     // Synchronous result (no jobId) → an Alert summarizing counts, not a job poll banner.
     await screen.findByText(/acme/i)
     expect(screen.getByText(/3/)).toBeTruthy()
+  })
+})
+
+describe("AnalyticsPage — Privacy", () => {
+  it("disables the Purge confirm until the exact tenant id is typed", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^privacy$/i }))
+    fireEvent.change(await screen.findByPlaceholderText(/tenant id/i), { target: { value: "acme" } })
+    fireEvent.click(screen.getByRole("button", { name: /^purge…$/i }))
+
+    // Dialog opens with a confirm-text input; the Erase button starts disabled.
+    const confirmInput = await screen.findByPlaceholderText("acme")
+    const eraseBtn = screen.getByRole("button", { name: /^erase$/i })
+    expect(eraseBtn).toHaveProperty("disabled", true)
+
+    fireEvent.change(confirmInput, { target: { value: "acm" } })
+    expect(eraseBtn).toHaveProperty("disabled", true)
+
+    fireEvent.change(confirmInput, { target: { value: "acme" } })
+    expect(eraseBtn).toHaveProperty("disabled", false)
+
+    fireEvent.click(eraseBtn)
+    await screen.findByText(/purged 42 rows for acme/i)
+  })
+
+  it("reprojects a single tenant and renders the counts result", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^privacy$/i }))
+    fireEvent.change(await screen.findByPlaceholderText(/tenant id/i), { target: { value: "acme" } })
+    fireEvent.click(screen.getByRole("button", { name: /^reproject…$/i }))
+
+    const confirmInput = await screen.findByPlaceholderText("acme")
+    fireEvent.change(confirmInput, { target: { value: "acme" } })
+    fireEvent.click(screen.getByRole("button", { name: /^reproject$/i }))
+
+    await screen.findByText(/reprojected 7 rows for acme/i)
   })
 })
