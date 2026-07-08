@@ -29,6 +29,9 @@ importers:
       '@fabriq-ai/admin-sdk':
         specifier: workspace:*
         version: link:../../packages/admin-sdk
+      '@fabriq-ai/plugin-analytics':
+        specifier: workspace:*
+        version: link:../../plugins/analytics
       '@fabriq-ai/plugin-api-console':
         specifier: workspace:*
         version: link:../../plugins/api-console
