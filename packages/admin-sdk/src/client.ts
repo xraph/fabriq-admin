@@ -209,6 +209,59 @@ export interface MigrationScaffold {
   content: string
 }
 
+/** The analytics sink status + per-tenant freshness (from GET /analytics/status). */
+export interface AnalyticsStatus {
+  enabled: boolean
+  tenantCount: number
+  worstLagSeconds: number
+  tenantsBehind: number
+  perTenantLag?: Record<string, number>
+}
+
+/** One tenant's drift report from a reconcile pass (see analytics.Report). */
+export interface AnalyticsReconcileReport {
+  checked: number
+  missing: number
+  stale: number
+  healed: number
+}
+
+/** The synchronous result of a single-tenant or fleet backfill. */
+export interface AnalyticsBackfillResult {
+  counts?: Record<string, number>
+  error?: string
+}
+
+/** The synchronous result of a single-tenant or fleet reconcile. */
+export interface AnalyticsReconcileResult {
+  reports?: Record<string, AnalyticsReconcileReport>
+  error?: string
+}
+
+/** The synchronous result of a single-tenant or fleet reproject. */
+export interface AnalyticsReprojectResult {
+  counts?: Record<string, number>
+  error?: string
+}
+
+/** The result of a tenant erasure (POST /analytics/purge). */
+export interface AnalyticsPurgeResult {
+  tenant: string
+  rowsDeleted: number
+}
+
+/** An async analytics bulk-op job (fleet backfill/reconcile/reproject), from the job poll. */
+export interface AnalyticsJob {
+  id: string
+  kind: "backfill" | "reconcile" | "reproject"
+  state: "running" | "done" | "failed"
+  /** The completed job's result payload (shape depends on `kind`); present once state is "done". */
+  result?: unknown
+  error?: string
+  startedAt: string
+  endedAt?: string
+}
+
 /** The agent write allowlist (deny-by-default): entity name → permitted ops. */
 export interface AgentWritePolicy {
   allow: Record<string, string[]>
@@ -1298,6 +1351,88 @@ export class FabriqClient {
   /** The SSE URL for streaming a migration job's state (use with EventSource). */
   migrationJobStreamUrl(id: string): string {
     return `${this.baseUrl}/migrations/jobs/${encodeURIComponent(id)}/stream`
+  }
+
+  /** GET /analytics/status — sink status + per-tenant freshness (cap analytics.read). */
+  analyticsStatus(): Promise<AnalyticsStatus> {
+    return this.transport.request<AnalyticsStatus>({
+      method: "GET",
+      path: `${this.baseUrl}/analytics/status`,
+    })
+  }
+
+  /**
+   * POST /analytics/backfill — single-tenant (sync) or fleet (sync, or async
+   * with `async: true` → `{jobId}`). Cap analytics.admin.
+   */
+  analyticsBackfill(req: {
+    tenant?: string
+    all?: boolean
+    concurrency?: number
+    async?: boolean
+  }): Promise<AnalyticsBackfillResult & { jobId?: string }> {
+    return this.transport.request({
+      method: "POST",
+      path: `${this.baseUrl}/analytics/backfill`,
+      body: req,
+    })
+  }
+
+  /**
+   * POST /analytics/reconcile — detect+heal drift; single-tenant (sync) or
+   * fleet (sync, or async with `async: true` → `{jobId}`). Cap analytics.admin.
+   */
+  analyticsReconcile(req: {
+    tenant?: string
+    all?: boolean
+    concurrency?: number
+    async?: boolean
+  }): Promise<AnalyticsReconcileResult & { jobId?: string }> {
+    return this.transport.request({
+      method: "POST",
+      path: `${this.baseUrl}/analytics/reconcile`,
+      body: req,
+    })
+  }
+
+  /**
+   * POST /analytics/reproject — re-apply the current redaction allow-list;
+   * single-tenant (sync) or fleet (sync, or async with `async: true` →
+   * `{jobId}`). Cap analytics.admin.
+   */
+  analyticsReproject(req: {
+    tenant?: string
+    all?: boolean
+    concurrency?: number
+    async?: boolean
+  }): Promise<AnalyticsReprojectResult & { jobId?: string }> {
+    return this.transport.request({
+      method: "POST",
+      path: `${this.baseUrl}/analytics/reproject`,
+      body: req,
+    })
+  }
+
+  /** POST /analytics/purge — irreversibly erase a tenant's analytics data. Cap analytics.admin. */
+  analyticsPurge(req: { tenant: string }): Promise<AnalyticsPurgeResult> {
+    return this.transport.request<AnalyticsPurgeResult>({
+      method: "POST",
+      path: `${this.baseUrl}/analytics/purge`,
+      body: req,
+    })
+  }
+
+  /** GET /analytics/jobs/:id — poll one async analytics job. */
+  analyticsJob(id: string): Promise<AnalyticsJob> {
+    return this.transport.request<AnalyticsJob>({
+      method: "GET",
+      path: `${this.baseUrl}/analytics/jobs/${encodeURIComponent(id)}`,
+    })
+  }
+
+  /** SSE URL for streaming an analytics job's state (use with EventSource). */
+  analyticsJobStreamUrl(id: string): string {
+    return `${this.baseUrl}/analytics/jobs/${encodeURIComponent(id)}/stream`
   }
 
   /**
