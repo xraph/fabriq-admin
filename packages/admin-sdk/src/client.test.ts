@@ -971,6 +971,73 @@ describe("FabriqClient", () => {
     expect(client.migrationJobStreamUrl("j1")).toBe("http://localhost:9000/migrations/jobs/j1/stream")
   })
 
+  it("analyticsStatus — GET /analytics/status", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ enabled: true, tenantCount: 3, worstLagSeconds: 120, tenantsBehind: 1, perTenantLag: { t1: 120 } })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const res = await client.analyticsStatus()
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/analytics/status")
+    expect(res.tenantsBehind).toBe(1)
+  })
+
+  it("analyticsBackfill — POST /analytics/backfill", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ jobId: "j1" })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.analyticsBackfill({ all: true, async: true })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/analytics/backfill")
+    expect(transport.lastRequest?.body).toEqual({ all: true, async: true })
+  })
+
+  it("analyticsReconcile — POST /analytics/reconcile", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ reports: { acme: { checked: 10, missing: 1, stale: 0, healed: 1 } } })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const res = await client.analyticsReconcile({ tenant: "acme" })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/analytics/reconcile")
+    expect(transport.lastRequest?.body).toEqual({ tenant: "acme" })
+    expect(res.reports?.acme.healed).toBe(1)
+  })
+
+  it("analyticsReproject — POST /analytics/reproject", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ counts: { acme: 5 } })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const res = await client.analyticsReproject({ tenant: "acme" })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/analytics/reproject")
+    expect(transport.lastRequest?.body).toEqual({ tenant: "acme" })
+    expect(res.counts?.acme).toBe(5)
+  })
+
+  it("analyticsPurge — POST /analytics/purge", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ tenant: "acme", rowsDeleted: 42 })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const res = await client.analyticsPurge({ tenant: "acme" })
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/analytics/purge")
+    expect(transport.lastRequest?.body).toEqual({ tenant: "acme" })
+    expect(res.rowsDeleted).toBe(42)
+  })
+
+  it("analyticsJob — GET /analytics/jobs/:id (encoded)", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ id: "j 1", kind: "backfill", state: "running", startedAt: "" })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    await client.analyticsJob("j 1")
+    expect(transport.lastRequest?.method?.toUpperCase()).toBe("GET")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/analytics/jobs/j%201")
+  })
+
+  it("analyticsJobStreamUrl — builds the SSE URL", () => {
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport: new FakeTransport() })
+    expect(client.analyticsJobStreamUrl("j1")).toBe("http://localhost:9000/analytics/jobs/j1/stream")
+  })
+
   it("migrationScaffold — POST /migrations/scaffold with name/version + optional up/down body", async () => {
     const transport = new FakeTransport()
     transport.setRequestResponse({ filename: "add_x.go", content: "package migrations" })

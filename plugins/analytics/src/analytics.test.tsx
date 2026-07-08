@@ -1,0 +1,162 @@
+import { describe, it, expect, vi } from "vitest"
+import { render, screen, fireEvent } from "@testing-library/react"
+import {
+  FabriqClient,
+  FabriqAdmin,
+  type FabriqTransport,
+  type AnalyticsStatus,
+} from "@fabriq-ai/admin-sdk"
+import { analyticsPlugin } from "./index"
+
+function makeClient(caps: string[], status?: Partial<AnalyticsStatus>, job?: unknown) {
+  const request = vi.fn(async (o: { path: string; body?: unknown }) => {
+    const p = o.path
+    if (p.endsWith("/meta")) {
+      return { name: "fabriq-admin", version: "0", capabilities: caps }
+    }
+    if (p.endsWith("/analytics/status")) {
+      return {
+        enabled: true,
+        tenantCount: 2,
+        worstLagSeconds: 120,
+        tenantsBehind: 1,
+        perTenantLag: { t1: 120, t2: 5 },
+        ...status,
+      }
+    }
+    if (p.endsWith("/analytics/backfill")) {
+      const body = (o.body ?? {}) as { tenant?: string; all?: boolean }
+      if (body.all) return { jobId: "j1" }
+      return { counts: { [body.tenant ?? "acme"]: 3 } }
+    }
+    if (p.includes("/analytics/jobs/")) {
+      return job ?? { id: "j1", kind: "backfill", state: "done", startedAt: "" }
+    }
+    if (p.endsWith("/analytics/purge")) {
+      const body = (o.body ?? {}) as { tenant?: string }
+      return { tenant: body.tenant ?? "acme", rowsDeleted: 42 }
+    }
+    if (p.endsWith("/analytics/reproject")) {
+      const body = (o.body ?? {}) as { tenant?: string }
+      return { counts: { [body.tenant ?? "acme"]: 7 } }
+    }
+    return {}
+  })
+  const transport = {
+    request: request as unknown as FabriqTransport["request"],
+    async *stream(): AsyncIterable<unknown> {},
+    async rawRequest() { throw new Error("nope") },
+    async fetchBlob() { throw new Error("nope") },
+  } as unknown as FabriqTransport
+  return new FabriqClient({ baseUrl: "http://test", transport })
+}
+
+function renderAnalytics(caps: string[], status?: Partial<AnalyticsStatus>, job?: unknown) {
+  return render(
+    <FabriqAdmin client={makeClient(caps, status, job)} plugins={[analyticsPlugin]} loadRemote={vi.fn()} initialPath="analytics" />,
+  )
+}
+
+describe("AnalyticsPage — Freshness", () => {
+  it("renders per-tenant lag and tenants-behind from status", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    // Await the per-tenant row itself (not just the summary badge) — the
+    // status query resolves in one render, but polling on the badge text
+    // alone can observe a DOM snapshot from before React has committed the
+    // sibling table rows.
+    await screen.findByText("t1")
+    expect(screen.getByText("t2")).toBeTruthy()
+    expect(screen.getByText(/1 tenants behind/i)).toBeTruthy()
+    expect(screen.getByText(/worst lag 120s/i)).toBeTruthy()
+  })
+
+  it("hides Operations and Privacy tabs without analytics.admin", async () => {
+    renderAnalytics(["analytics.read"])
+    await screen.findByText(/tenants behind/i)
+    expect(screen.queryByRole("button", { name: /^operations$/i })).toBeNull()
+    expect(screen.queryByRole("button", { name: /^privacy$/i })).toBeNull()
+  })
+
+  it("shows Operations and Privacy tabs with analytics.admin", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    // Await the admin-gated button directly — the meta query (which drives
+    // canAdmin) and the analytics-status query resolve independently, so
+    // waiting on status text alone can race ahead of the meta-driven tabs.
+    expect(await screen.findByRole("button", { name: /^operations$/i })).toBeTruthy()
+    expect(screen.getByRole("button", { name: /^privacy$/i })).toBeTruthy()
+  })
+})
+
+describe("AnalyticsPage — Operations", () => {
+  it("runs a fleet backfill and polls the job to completion", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    // Job polled to a terminal state → status banner shows kind + state.
+    await screen.findByText(/backfill — done/i)
+  })
+
+  it("runs a single-tenant sync backfill and renders the sync result", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.change(await screen.findByPlaceholderText(/tenant id/i), { target: { value: "acme" } })
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    // Synchronous result (no jobId) → an Alert summarizing counts, not a job poll banner.
+    await screen.findByText(/acme/i)
+    expect(screen.getByText(/3/)).toBeTruthy()
+  })
+
+  it("surfaces a partial-failure job.result.error instead of a flat 'complete'", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"], undefined, {
+      id: "j1",
+      kind: "backfill",
+      state: "done",
+      result: { error: "tenant acme: boom" },
+      startedAt: "",
+    })
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    // The async job reached state:"done" but carried a per-tenant failure in
+    // its result — that text must be shown, and a bare "complete" must not.
+    await screen.findByText(/tenant acme: boom/i)
+    expect(screen.queryByText(/^complete$/i)).toBeNull()
+  })
+})
+
+describe("AnalyticsPage — Privacy", () => {
+  it("disables the Purge confirm until the exact tenant id is typed", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^privacy$/i }))
+    fireEvent.change(await screen.findByPlaceholderText(/tenant id/i), { target: { value: "acme" } })
+    fireEvent.click(screen.getByRole("button", { name: /^purge…$/i }))
+
+    // Dialog opens with a confirm-text input; the Erase button starts disabled.
+    const confirmInput = await screen.findByPlaceholderText("acme")
+    const eraseBtn = screen.getByRole("button", { name: /^erase$/i })
+    expect(eraseBtn).toHaveProperty("disabled", true)
+
+    fireEvent.change(confirmInput, { target: { value: "acm" } })
+    expect(eraseBtn).toHaveProperty("disabled", true)
+
+    fireEvent.change(confirmInput, { target: { value: "acme" } })
+    expect(eraseBtn).toHaveProperty("disabled", false)
+
+    fireEvent.click(eraseBtn)
+    await screen.findByText(/purged 42 rows for acme/i)
+  })
+
+  it("reprojects a single tenant and renders the counts result", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^privacy$/i }))
+    fireEvent.change(await screen.findByPlaceholderText(/tenant id/i), { target: { value: "acme" } })
+    fireEvent.click(screen.getByRole("button", { name: /^reproject…$/i }))
+
+    const confirmInput = await screen.findByPlaceholderText("acme")
+    fireEvent.change(confirmInput, { target: { value: "acme" } })
+    fireEvent.click(screen.getByRole("button", { name: /^reproject$/i }))
+
+    await screen.findByText(/reprojected 7 rows for acme/i)
+  })
+})
