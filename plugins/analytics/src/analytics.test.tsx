@@ -8,7 +8,12 @@ import {
 } from "@fabriq-ai/admin-sdk"
 import { analyticsPlugin } from "./index"
 
-function makeClient(caps: string[], status?: Partial<AnalyticsStatus>, job?: unknown) {
+function makeClient(
+  caps: string[],
+  status?: Partial<AnalyticsStatus>,
+  job?: unknown,
+  opts?: { streamThrows?: boolean; streamEvents?: unknown[] },
+) {
   const request = vi.fn(async (o: { path: string; body?: unknown }) => {
     const p = o.path
     if (p.endsWith("/meta")) {
@@ -37,24 +42,39 @@ function makeClient(caps: string[], status?: Partial<AnalyticsStatus>, job?: unk
       return { tenant: body.tenant ?? "acme", rowsDeleted: 42 }
     }
     if (p.endsWith("/analytics/reproject")) {
-      const body = (o.body ?? {}) as { tenant?: string }
+      const body = (o.body ?? {}) as { tenant?: string; all?: boolean }
+      if (body.all) return { jobId: "j1" }
       return { counts: { [body.tenant ?? "acme"]: 7 } }
     }
     return {}
   })
+  const streamCalls: number[] = []
   const transport = {
     request: request as unknown as FabriqTransport["request"],
-    async *stream(): AsyncIterable<unknown> {},
+    async *stream(): AsyncIterable<unknown> {
+      streamCalls.push(1)
+      if (opts?.streamThrows) throw new Error("no SSE")
+      for (const ev of opts?.streamEvents ?? []) {
+        yield ev
+      }
+    },
     async rawRequest() { throw new Error("nope") },
     async fetchBlob() { throw new Error("nope") },
   } as unknown as FabriqTransport
-  return new FabriqClient({ baseUrl: "http://test", transport })
+  return { client: new FabriqClient({ baseUrl: "http://test", transport }), request, streamCalls }
 }
 
-function renderAnalytics(caps: string[], status?: Partial<AnalyticsStatus>, job?: unknown) {
-  return render(
-    <FabriqAdmin client={makeClient(caps, status, job)} plugins={[analyticsPlugin]} loadRemote={vi.fn()} initialPath="analytics" />,
+function renderAnalytics(
+  caps: string[],
+  status?: Partial<AnalyticsStatus>,
+  job?: unknown,
+  opts?: { streamThrows?: boolean; streamEvents?: unknown[] },
+) {
+  const { client, request, streamCalls } = makeClient(caps, status, job, opts)
+  render(
+    <FabriqAdmin client={client} plugins={[analyticsPlugin]} loadRemote={vi.fn()} initialPath="analytics" />,
   )
+  return { request, streamCalls }
 }
 
 describe("AnalyticsPage — Freshness", () => {
@@ -122,6 +142,88 @@ describe("AnalyticsPage — Operations", () => {
     // its result — that text must be shown, and a bare "complete" must not.
     await screen.findByText(/tenant acme: boom/i)
     expect(screen.queryByText(/^complete$/i)).toBeNull()
+  })
+
+  it("follows the job via the stream and falls back to polling when it throws", async () => {
+    const { request, streamCalls } = renderAnalytics(
+      ["analytics.read", "analytics.admin"], undefined, undefined, { streamThrows: true },
+    )
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    // SSE stream is attempted → throws → follow degrades to polling
+    // analyticsJob, which reports the terminal state → banner reaches "done".
+    await screen.findByText(/backfill — done/i)
+    expect(streamCalls.length).toBeGreaterThan(0)
+    const jobPoll = request.mock.calls.find(
+      ([o]) => (o as { path: string }).path.includes("/analytics/jobs/"),
+    )
+    expect(jobPoll).toBeTruthy()
+  })
+
+  it("follows the job to completion via the SSE stream directly", async () => {
+    const { streamCalls } = renderAnalytics(
+      ["analytics.read", "analytics.admin"], undefined, undefined,
+      {
+        streamEvents: [
+          { id: "j1", kind: "backfill", state: "running", startedAt: "" },
+          { id: "j1", kind: "backfill", state: "done", startedAt: "" },
+        ],
+      },
+    )
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    // The stream itself yields the terminal event — no fallback poll needed.
+    await screen.findByText(/backfill — done/i)
+    expect(streamCalls.length).toBeGreaterThan(0)
+  })
+
+  it("omits concurrency from the request body when left empty on a fleet op", async () => {
+    const { request } = renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    await screen.findByText(/backfill — done/i)
+    const call = request.mock.calls.find(
+      ([o]) => (o as { path: string }).path.endsWith("/analytics/backfill"),
+    )
+    expect(call?.[0] as { body?: unknown }).toHaveProperty("body")
+    expect((call?.[0] as { body?: unknown }).body).not.toHaveProperty("concurrency")
+  })
+
+  it("runs a single-tenant reproject and renders the counts result", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.change(await screen.findByPlaceholderText(/tenant id/i), { target: { value: "acme" } })
+    fireEvent.click(screen.getByRole("button", { name: /^reproject$/i }))
+    await screen.findByText(/acme/i)
+    expect(screen.getByText(/7/)).toBeTruthy()
+  })
+
+  it("runs a fleet reproject as an async job (all + async)", async () => {
+    const { request } = renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^reproject$/i }))
+    await screen.findByText(/done/i)
+    const call = request.mock.calls.find(
+      ([o]) => (o as { path: string }).path.endsWith("/analytics/reproject"),
+    )
+    expect((call?.[0] as { body?: unknown }).body).toMatchObject({ all: true, async: true })
+  })
+
+  it("forwards a concurrency bound on fleet ops when set", async () => {
+    const { request } = renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.change(await screen.findByPlaceholderText(/concurrency/i), { target: { value: "4" } })
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    await screen.findByText(/backfill — done/i)
+    const call = request.mock.calls.find(
+      ([o]) => (o as { path: string }).path.endsWith("/analytics/backfill"),
+    )
+    expect((call?.[0] as { body?: unknown }).body).toMatchObject({ all: true, async: true, concurrency: 4 })
   })
 })
 

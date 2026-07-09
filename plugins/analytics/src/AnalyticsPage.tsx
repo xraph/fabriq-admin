@@ -7,6 +7,7 @@ import {
   type AnalyticsJob,
   type AnalyticsBackfillResult,
   type AnalyticsReconcileResult,
+  type AnalyticsReprojectResult,
 } from "@fabriq-ai/admin-sdk"
 import {
   Button,
@@ -153,21 +154,23 @@ function FreshnessTab() {
 type SyncResult =
   | { op: "backfill"; res: AnalyticsBackfillResult }
   | { op: "reconcile"; res: AnalyticsReconcileResult }
+  | { op: "reproject"; res: AnalyticsReprojectResult }
 
 function OperationsTab() {
   const client = useFabriqClient()
   const [tenant, setTenant] = useState("")
   const [all, setAll] = useState(false)
+  const [concurrency, setConcurrency] = useState("")
   const [job, setJob] = useState<AnalyticsJob | null>(null)
   const [result, setResult] = useState<SyncResult | null>(null)
   const [runErr, setRunErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  // Stop polling if the page unmounts (tab switch / navigation).
+  // Stop following if the page unmounts (tab switch / navigation).
   const mounted = useRef(true)
-  useEffect(() => () => { mounted.current = false }, [])
+  const acRef = useRef<AbortController | null>(null)
+  useEffect(() => () => { mounted.current = false; acRef.current?.abort() }, [])
 
-  // Poll a job until it reaches a terminal state, bounded so a stuck job never
-  // pins the UI forever (~3 min at 800ms) — on timeout we surface an error.
+  // Bounded poll fallback (~3 min at 800ms) so a stuck job never pins the UI.
   const maxPolls = 225
   async function pollJob(id: string) {
     for (let i = 0; i < maxPolls && mounted.current; i++) {
@@ -182,7 +185,42 @@ function OperationsTab() {
     }
   }
 
-  async function run(op: "backfill" | "reconcile") {
+  // Follow a job to a terminal state: prefer the SSE stream, degrade to
+  // polling if the stream is unsupported, drops, or ends without a terminal
+  // event (parity with the tenants plugin's JobFollower).
+  async function followJob(id: string) {
+    const ac = new AbortController()
+    acRef.current = ac
+    try {
+      for await (const ev of client.analyticsJobStream(id, ac.signal)) {
+        if (!mounted.current) return
+        setJob(ev)
+        if (ev.state !== "running") return
+      }
+      // Stream closed without a terminal event — confirm the final state.
+      if (!mounted.current) return
+      const j = await client.analyticsJob(id)
+      if (!mounted.current) return
+      setJob(j)
+      if (j.state === "running") {
+        try {
+          await pollJob(id)
+        } catch (e) {
+          if (mounted.current) setRunErr(errMsg(e))
+        }
+      }
+    } catch {
+      // SSE unsupported / dropped — degrade to polling.
+      if (!mounted.current) return
+      try {
+        await pollJob(id)
+      } catch (e) {
+        if (mounted.current) setRunErr(errMsg(e))
+      }
+    }
+  }
+
+  async function run(op: "backfill" | "reconcile" | "reproject") {
     if (!all && !tenant.trim()) {
       setRunErr("Enter a tenant id or select all tenants.")
       return
@@ -192,20 +230,31 @@ function OperationsTab() {
     setResult(null)
     setBusy(true)
     try {
-      const req = all ? { all: true, async: true } : { tenant: tenant.trim() }
+      const req: { tenant?: string; all?: boolean; async?: boolean; concurrency?: number } = all
+        ? { all: true, async: true }
+        : { tenant: tenant.trim() }
+      const n = parseInt(concurrency, 10)
+      if (all && Number.isFinite(n) && n > 0) req.concurrency = n
       if (op === "backfill") {
         const res = await client.analyticsBackfill(req)
         if (res.jobId) {
-          await pollJob(res.jobId)
+          await followJob(res.jobId)
         } else if (mounted.current) {
           setResult({ op: "backfill", res })
         }
-      } else {
+      } else if (op === "reconcile") {
         const res = await client.analyticsReconcile(req)
         if (res.jobId) {
-          await pollJob(res.jobId)
+          await followJob(res.jobId)
         } else if (mounted.current) {
           setResult({ op: "reconcile", res })
+        }
+      } else {
+        const res = await client.analyticsReproject(req)
+        if (res.jobId) {
+          await followJob(res.jobId)
+        } else if (mounted.current) {
+          setResult({ op: "reproject", res })
         }
       }
     } catch (e) {
@@ -228,11 +277,23 @@ function OperationsTab() {
         <label className="flex items-center gap-1 text-sm">
           <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> all tenants
         </label>
+        <Input
+          type="number"
+          min={1}
+          placeholder="concurrency"
+          value={concurrency}
+          disabled={!all}
+          onChange={(e) => setConcurrency(e.target.value)}
+          className="max-w-[8rem]"
+        />
         <Button size="sm" disabled={busy} onClick={() => run("backfill")}>
           Backfill
         </Button>
         <Button size="sm" variant="outline" disabled={busy} onClick={() => run("reconcile")}>
           Reconcile
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => run("reproject")}>
+          Reproject
         </Button>
       </div>
 
@@ -271,7 +332,7 @@ function OperationsTab() {
         <Alert>
           <AlertTitle>{result.op} complete</AlertTitle>
           <AlertDescription className="font-mono text-xs">
-            {result.op === "backfill" ? (
+            {result.op === "backfill" || result.op === "reproject" ? (
               result.res.error ? (
                 result.res.error
               ) : (

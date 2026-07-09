@@ -1038,6 +1038,24 @@ describe("FabriqClient", () => {
     expect(client.analyticsJobStreamUrl("j1")).toBe("http://localhost:9000/analytics/jobs/j1/stream")
   })
 
+  it("analyticsJobStream — GET /analytics/jobs/:id/stream and yields job events", async () => {
+    const transport = new FakeTransport()
+    const events = [
+      { id: "j1", kind: "reproject", state: "running", startedAt: "" },
+      { id: "j1", kind: "reproject", state: "done", startedAt: "" },
+    ]
+    transport.setStreamEvents(events)
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const collected: unknown[] = []
+    for await (const ev of client.analyticsJobStream("j 1")) {
+      collected.push(ev)
+    }
+
+    expect(transport.lastStream?.path).toBe("http://localhost:9000/analytics/jobs/j%201/stream")
+    expect(collected).toEqual(events)
+  })
+
   it("migrationScaffold — POST /migrations/scaffold with name/version + optional up/down body", async () => {
     const transport = new FakeTransport()
     transport.setRequestResponse({ filename: "add_x.go", content: "package migrations" })
