@@ -202,10 +202,21 @@ function OperationsTab() {
       const j = await client.analyticsJob(id)
       if (!mounted.current) return
       setJob(j)
-      if (j.state === "running") await pollJob(id)
+      if (j.state === "running") {
+        try {
+          await pollJob(id)
+        } catch (e) {
+          if (mounted.current) setRunErr(errMsg(e))
+        }
+      }
     } catch {
       // SSE unsupported / dropped — degrade to polling.
-      if (mounted.current) await pollJob(id)
+      if (!mounted.current) return
+      try {
+        await pollJob(id)
+      } catch (e) {
+        if (mounted.current) setRunErr(errMsg(e))
+      }
     }
   }
 

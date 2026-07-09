@@ -1440,7 +1440,8 @@ export class FabriqClient {
    * async iterable of state snapshots (mirrors tenantJobStream). Uses the
    * fetch-based SSE transport so auth headers attach — native EventSource
    * cannot set them. Ends when the job reaches a terminal state or the signal
-   * aborts. Superseded convenience for `analyticsJobStreamUrl`.
+   * aborts. Prefer this over the lower-level `analyticsJobStreamUrl` string
+   * helper.
    */
   analyticsJobStream(id: string, signal?: AbortSignal): AsyncIterable<AnalyticsJob> {
     return this.transport.stream({

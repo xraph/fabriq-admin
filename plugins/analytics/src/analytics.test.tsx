@@ -12,7 +12,7 @@ function makeClient(
   caps: string[],
   status?: Partial<AnalyticsStatus>,
   job?: unknown,
-  opts?: { streamThrows?: boolean },
+  opts?: { streamThrows?: boolean; streamEvents?: unknown[] },
 ) {
   const request = vi.fn(async (o: { path: string; body?: unknown }) => {
     const p = o.path
@@ -54,6 +54,9 @@ function makeClient(
     async *stream(): AsyncIterable<unknown> {
       streamCalls.push(1)
       if (opts?.streamThrows) throw new Error("no SSE")
+      for (const ev of opts?.streamEvents ?? []) {
+        yield ev
+      }
     },
     async rawRequest() { throw new Error("nope") },
     async fetchBlob() { throw new Error("nope") },
@@ -65,7 +68,7 @@ function renderAnalytics(
   caps: string[],
   status?: Partial<AnalyticsStatus>,
   job?: unknown,
-  opts?: { streamThrows?: boolean },
+  opts?: { streamThrows?: boolean; streamEvents?: unknown[] },
 ) {
   const { client, request, streamCalls } = makeClient(caps, status, job, opts)
   render(
@@ -156,6 +159,37 @@ describe("AnalyticsPage — Operations", () => {
       ([o]) => (o as { path: string }).path.includes("/analytics/jobs/"),
     )
     expect(jobPoll).toBeTruthy()
+  })
+
+  it("follows the job to completion via the SSE stream directly", async () => {
+    const { streamCalls } = renderAnalytics(
+      ["analytics.read", "analytics.admin"], undefined, undefined,
+      {
+        streamEvents: [
+          { id: "j1", kind: "backfill", state: "running", startedAt: "" },
+          { id: "j1", kind: "backfill", state: "done", startedAt: "" },
+        ],
+      },
+    )
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    // The stream itself yields the terminal event — no fallback poll needed.
+    await screen.findByText(/backfill — done/i)
+    expect(streamCalls.length).toBeGreaterThan(0)
+  })
+
+  it("omits concurrency from the request body when left empty on a fleet op", async () => {
+    const { request } = renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    await screen.findByText(/backfill — done/i)
+    const call = request.mock.calls.find(
+      ([o]) => (o as { path: string }).path.endsWith("/analytics/backfill"),
+    )
+    expect(call?.[0] as { body?: unknown }).toHaveProperty("body")
+    expect((call?.[0] as { body?: unknown }).body).not.toHaveProperty("concurrency")
   })
 
   it("runs a single-tenant reproject and renders the counts result", async () => {
