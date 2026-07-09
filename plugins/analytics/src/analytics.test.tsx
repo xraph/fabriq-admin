@@ -178,6 +178,19 @@ describe("AnalyticsPage — Operations", () => {
     )
     expect((call?.[0] as { body?: unknown }).body).toMatchObject({ all: true, async: true })
   })
+
+  it("forwards a concurrency bound on fleet ops when set", async () => {
+    const { request } = renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.change(await screen.findByPlaceholderText(/concurrency/i), { target: { value: "4" } })
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    await screen.findByText(/backfill — done/i)
+    const call = request.mock.calls.find(
+      ([o]) => (o as { path: string }).path.endsWith("/analytics/backfill"),
+    )
+    expect((call?.[0] as { body?: unknown }).body).toMatchObject({ all: true, async: true, concurrency: 4 })
+  })
 })
 
 describe("AnalyticsPage — Privacy", () => {

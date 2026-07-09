@@ -160,6 +160,7 @@ function OperationsTab() {
   const client = useFabriqClient()
   const [tenant, setTenant] = useState("")
   const [all, setAll] = useState(false)
+  const [concurrency, setConcurrency] = useState("")
   const [job, setJob] = useState<AnalyticsJob | null>(null)
   const [result, setResult] = useState<SyncResult | null>(null)
   const [runErr, setRunErr] = useState<string | null>(null)
@@ -218,7 +219,11 @@ function OperationsTab() {
     setResult(null)
     setBusy(true)
     try {
-      const req = all ? { all: true, async: true } : { tenant: tenant.trim() }
+      const req: { tenant?: string; all?: boolean; async?: boolean; concurrency?: number } = all
+        ? { all: true, async: true }
+        : { tenant: tenant.trim() }
+      const n = parseInt(concurrency, 10)
+      if (all && Number.isFinite(n) && n > 0) req.concurrency = n
       if (op === "backfill") {
         const res = await client.analyticsBackfill(req)
         if (res.jobId) {
@@ -261,6 +266,15 @@ function OperationsTab() {
         <label className="flex items-center gap-1 text-sm">
           <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> all tenants
         </label>
+        <Input
+          type="number"
+          min={1}
+          placeholder="concurrency"
+          value={concurrency}
+          disabled={!all}
+          onChange={(e) => setConcurrency(e.target.value)}
+          className="max-w-[8rem]"
+        />
         <Button size="sm" disabled={busy} onClick={() => run("backfill")}>
           Backfill
         </Button>
