@@ -162,12 +162,12 @@ function OperationsTab() {
   const [result, setResult] = useState<SyncResult | null>(null)
   const [runErr, setRunErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  // Stop polling if the page unmounts (tab switch / navigation).
+  // Stop following if the page unmounts (tab switch / navigation).
   const mounted = useRef(true)
-  useEffect(() => () => { mounted.current = false }, [])
+  const acRef = useRef<AbortController | null>(null)
+  useEffect(() => () => { mounted.current = false; acRef.current?.abort() }, [])
 
-  // Poll a job until it reaches a terminal state, bounded so a stuck job never
-  // pins the UI forever (~3 min at 800ms) — on timeout we surface an error.
+  // Bounded poll fallback (~3 min at 800ms) so a stuck job never pins the UI.
   const maxPolls = 225
   async function pollJob(id: string) {
     for (let i = 0; i < maxPolls && mounted.current; i++) {
@@ -179,6 +179,30 @@ function OperationsTab() {
     }
     if (mounted.current) {
       setRunErr("Job still running after the poll window — check the backend for its final state.")
+    }
+  }
+
+  // Follow a job to a terminal state: prefer the SSE stream, degrade to
+  // polling if the stream is unsupported, drops, or ends without a terminal
+  // event (parity with the tenants plugin's JobFollower).
+  async function followJob(id: string) {
+    const ac = new AbortController()
+    acRef.current = ac
+    try {
+      for await (const ev of client.analyticsJobStream(id, ac.signal)) {
+        if (!mounted.current) return
+        setJob(ev)
+        if (ev.state !== "running") return
+      }
+      // Stream closed without a terminal event — confirm the final state.
+      if (!mounted.current) return
+      const j = await client.analyticsJob(id)
+      if (!mounted.current) return
+      setJob(j)
+      if (j.state === "running") await pollJob(id)
+    } catch {
+      // SSE unsupported / dropped — degrade to polling.
+      if (mounted.current) await pollJob(id)
     }
   }
 
@@ -196,14 +220,14 @@ function OperationsTab() {
       if (op === "backfill") {
         const res = await client.analyticsBackfill(req)
         if (res.jobId) {
-          await pollJob(res.jobId)
+          await followJob(res.jobId)
         } else if (mounted.current) {
           setResult({ op: "backfill", res })
         }
       } else {
         const res = await client.analyticsReconcile(req)
         if (res.jobId) {
-          await pollJob(res.jobId)
+          await followJob(res.jobId)
         } else if (mounted.current) {
           setResult({ op: "reconcile", res })
         }

@@ -8,7 +8,12 @@ import {
 } from "@fabriq-ai/admin-sdk"
 import { analyticsPlugin } from "./index"
 
-function makeClient(caps: string[], status?: Partial<AnalyticsStatus>, job?: unknown) {
+function makeClient(
+  caps: string[],
+  status?: Partial<AnalyticsStatus>,
+  job?: unknown,
+  opts?: { streamThrows?: boolean },
+) {
   const request = vi.fn(async (o: { path: string; body?: unknown }) => {
     const p = o.path
     if (p.endsWith("/meta")) {
@@ -42,19 +47,30 @@ function makeClient(caps: string[], status?: Partial<AnalyticsStatus>, job?: unk
     }
     return {}
   })
+  const streamCalls: number[] = []
   const transport = {
     request: request as unknown as FabriqTransport["request"],
-    async *stream(): AsyncIterable<unknown> {},
+    async *stream(): AsyncIterable<unknown> {
+      streamCalls.push(1)
+      if (opts?.streamThrows) throw new Error("no SSE")
+    },
     async rawRequest() { throw new Error("nope") },
     async fetchBlob() { throw new Error("nope") },
   } as unknown as FabriqTransport
-  return new FabriqClient({ baseUrl: "http://test", transport })
+  return { client: new FabriqClient({ baseUrl: "http://test", transport }), request, streamCalls }
 }
 
-function renderAnalytics(caps: string[], status?: Partial<AnalyticsStatus>, job?: unknown) {
-  return render(
-    <FabriqAdmin client={makeClient(caps, status, job)} plugins={[analyticsPlugin]} loadRemote={vi.fn()} initialPath="analytics" />,
+function renderAnalytics(
+  caps: string[],
+  status?: Partial<AnalyticsStatus>,
+  job?: unknown,
+  opts?: { streamThrows?: boolean },
+) {
+  const { client, request, streamCalls } = makeClient(caps, status, job, opts)
+  render(
+    <FabriqAdmin client={client} plugins={[analyticsPlugin]} loadRemote={vi.fn()} initialPath="analytics" />,
   )
+  return { request, streamCalls }
 }
 
 describe("AnalyticsPage — Freshness", () => {
@@ -122,6 +138,23 @@ describe("AnalyticsPage — Operations", () => {
     // its result — that text must be shown, and a bare "complete" must not.
     await screen.findByText(/tenant acme: boom/i)
     expect(screen.queryByText(/^complete$/i)).toBeNull()
+  })
+
+  it("follows the job via the stream and falls back to polling when it throws", async () => {
+    const { request, streamCalls } = renderAnalytics(
+      ["analytics.read", "analytics.admin"], undefined, undefined, { streamThrows: true },
+    )
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    // SSE stream is attempted → throws → follow degrades to polling
+    // analyticsJob, which reports the terminal state → banner reaches "done".
+    await screen.findByText(/backfill — done/i)
+    expect(streamCalls.length).toBeGreaterThan(0)
+    const jobPoll = request.mock.calls.find(
+      ([o]) => (o as { path: string }).path.includes("/analytics/jobs/"),
+    )
+    expect(jobPoll).toBeTruthy()
   })
 })
 
