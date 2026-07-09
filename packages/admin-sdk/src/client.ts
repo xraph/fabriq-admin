@@ -1436,6 +1436,21 @@ export class FabriqClient {
   }
 
   /**
+   * GET /analytics/jobs/:id/stream — follow one async analytics job as an
+   * async iterable of state snapshots (mirrors tenantJobStream). Uses the
+   * fetch-based SSE transport so auth headers attach — native EventSource
+   * cannot set them. Ends when the job reaches a terminal state or the signal
+   * aborts. Superseded convenience for `analyticsJobStreamUrl`.
+   */
+  analyticsJobStream(id: string, signal?: AbortSignal): AsyncIterable<AnalyticsJob> {
+    return this.transport.stream({
+      method: "GET",
+      path: `${this.baseUrl}/analytics/jobs/${encodeURIComponent(id)}/stream`,
+      signal,
+    }) as AsyncIterable<AnalyticsJob>
+  }
+
+  /**
    * POST /migrations/scaffold — generate a Go migration-file skeleton (runs
    * nothing, writes nothing). Optional `up`/`down` DDL statements are emitted
    * inside the execAll blocks so the returned file is save-ready; when omitted
