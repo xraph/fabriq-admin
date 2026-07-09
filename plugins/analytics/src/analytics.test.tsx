@@ -1,3 +1,4 @@
+import { StrictMode } from "react"
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import {
@@ -224,6 +225,25 @@ describe("AnalyticsPage — Operations", () => {
       ([o]) => (o as { path: string }).path.endsWith("/analytics/backfill"),
     )
     expect((call?.[0] as { body?: unknown }).body).toMatchObject({ all: true, async: true, concurrency: 4 })
+  })
+
+  it("completes an operation under StrictMode (mounted ref reset on remount)", async () => {
+    // StrictMode double-invokes effects (setup → cleanup → setup). If the
+    // mount effect only set `mounted = false` on cleanup without resetting it
+    // to true on re-setup, `mounted.current` would be stuck false and every
+    // response handler — including the finally's setBusy(false) and setResult —
+    // would be a no-op, so the sync result would never render. This guards that.
+    const { client } = makeClient(["analytics.read", "analytics.admin"])
+    render(
+      <StrictMode>
+        <FabriqAdmin client={client} plugins={[analyticsPlugin]} loadRemote={vi.fn()} initialPath="analytics" />
+      </StrictMode>,
+    )
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.change(await screen.findByPlaceholderText(/tenant id/i), { target: { value: "acme" } })
+    fireEvent.click(screen.getByRole("button", { name: /^backfill$/i }))
+    await screen.findByText(/acme/i)
+    expect(screen.getByText(/3/)).toBeTruthy()
   })
 })
 

@@ -168,7 +168,17 @@ function OperationsTab() {
   // Stop following if the page unmounts (tab switch / navigation).
   const mounted = useRef(true)
   const acRef = useRef<AbortController | null>(null)
-  useEffect(() => () => { mounted.current = false; acRef.current?.abort() }, [])
+  // Set mounted TRUE on (re)mount, not just once at ref init: React StrictMode
+  // (and any remount) runs the cleanup — flipping mounted to false — before
+  // re-running setup, which would otherwise leave mounted stuck false and make
+  // every response handler (incl. the finally's setBusy(false)) a no-op.
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      acRef.current?.abort()
+    }
+  }, [])
 
   // Bounded poll fallback (~3 min at 800ms) so a stuck job never pins the UI.
   const maxPolls = 225
