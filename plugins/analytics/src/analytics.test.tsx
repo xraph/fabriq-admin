@@ -42,7 +42,8 @@ function makeClient(
       return { tenant: body.tenant ?? "acme", rowsDeleted: 42 }
     }
     if (p.endsWith("/analytics/reproject")) {
-      const body = (o.body ?? {}) as { tenant?: string }
+      const body = (o.body ?? {}) as { tenant?: string; all?: boolean }
+      if (body.all) return { jobId: "j1" }
       return { counts: { [body.tenant ?? "acme"]: 7 } }
     }
     return {}
@@ -155,6 +156,27 @@ describe("AnalyticsPage — Operations", () => {
       ([o]) => (o as { path: string }).path.includes("/analytics/jobs/"),
     )
     expect(jobPoll).toBeTruthy()
+  })
+
+  it("runs a single-tenant reproject and renders the counts result", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.change(await screen.findByPlaceholderText(/tenant id/i), { target: { value: "acme" } })
+    fireEvent.click(screen.getByRole("button", { name: /^reproject$/i }))
+    await screen.findByText(/acme/i)
+    expect(screen.getByText(/7/)).toBeTruthy()
+  })
+
+  it("runs a fleet reproject as an async job (all + async)", async () => {
+    const { request } = renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^operations$/i }))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /all tenants/i }))
+    fireEvent.click(screen.getByRole("button", { name: /^reproject$/i }))
+    await screen.findByText(/done/i)
+    const call = request.mock.calls.find(
+      ([o]) => (o as { path: string }).path.endsWith("/analytics/reproject"),
+    )
+    expect((call?.[0] as { body?: unknown }).body).toMatchObject({ all: true, async: true })
   })
 })
 

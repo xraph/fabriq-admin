@@ -7,6 +7,7 @@ import {
   type AnalyticsJob,
   type AnalyticsBackfillResult,
   type AnalyticsReconcileResult,
+  type AnalyticsReprojectResult,
 } from "@fabriq-ai/admin-sdk"
 import {
   Button,
@@ -153,6 +154,7 @@ function FreshnessTab() {
 type SyncResult =
   | { op: "backfill"; res: AnalyticsBackfillResult }
   | { op: "reconcile"; res: AnalyticsReconcileResult }
+  | { op: "reproject"; res: AnalyticsReprojectResult }
 
 function OperationsTab() {
   const client = useFabriqClient()
@@ -206,7 +208,7 @@ function OperationsTab() {
     }
   }
 
-  async function run(op: "backfill" | "reconcile") {
+  async function run(op: "backfill" | "reconcile" | "reproject") {
     if (!all && !tenant.trim()) {
       setRunErr("Enter a tenant id or select all tenants.")
       return
@@ -224,12 +226,19 @@ function OperationsTab() {
         } else if (mounted.current) {
           setResult({ op: "backfill", res })
         }
-      } else {
+      } else if (op === "reconcile") {
         const res = await client.analyticsReconcile(req)
         if (res.jobId) {
           await followJob(res.jobId)
         } else if (mounted.current) {
           setResult({ op: "reconcile", res })
+        }
+      } else {
+        const res = await client.analyticsReproject(req)
+        if (res.jobId) {
+          await followJob(res.jobId)
+        } else if (mounted.current) {
+          setResult({ op: "reproject", res })
         }
       }
     } catch (e) {
@@ -257,6 +266,9 @@ function OperationsTab() {
         </Button>
         <Button size="sm" variant="outline" disabled={busy} onClick={() => run("reconcile")}>
           Reconcile
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => run("reproject")}>
+          Reproject
         </Button>
       </div>
 
@@ -295,7 +307,7 @@ function OperationsTab() {
         <Alert>
           <AlertTitle>{result.op} complete</AlertTitle>
           <AlertDescription className="font-mono text-xs">
-            {result.op === "backfill" ? (
+            {result.op === "backfill" || result.op === "reproject" ? (
               result.res.error ? (
                 result.res.error
               ) : (
