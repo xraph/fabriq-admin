@@ -9,6 +9,7 @@ import {
   type AnalyticsReprojectResult,
 } from "@fabriq-ai/admin-sdk"
 import { errMsg } from "./errMsg"
+import { QueryTab } from "./QueryTab"
 import {
   Button,
   Badge,
@@ -23,7 +24,7 @@ import {
   DialogDescription,
 } from "@fabriq-ai/ui"
 
-type Tab = "freshness" | "operations" | "privacy"
+type Tab = "freshness" | "query" | "operations" | "privacy"
 
 const LAG_THRESHOLD = 60 // seconds; matches the backend's tenants-behind gauge
 
@@ -34,6 +35,7 @@ export function AnalyticsPage() {
 
   const tabs: { id: Tab; label: string; show: boolean }[] = [
     { id: "freshness", label: "Freshness", show: true },
+    { id: "query", label: "Query", show: true },
     { id: "operations", label: "Operations", show: canAdmin },
     { id: "privacy", label: "Privacy", show: canAdmin },
   ]
@@ -64,6 +66,7 @@ export function AnalyticsPage() {
       </div>
 
       {tab === "freshness" && <FreshnessTab />}
+      {tab === "query" && <QueryTab />}
       {tab === "operations" && canAdmin && <OperationsTab />}
       {tab === "privacy" && canAdmin && <PrivacyTab />}
     </div>
