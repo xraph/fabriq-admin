@@ -15,7 +15,7 @@
 - Never add `Co-Authored-By` trailers to commits.
 - Reuse `precheckReadOnlySQL`, `hasKeywordPrefix`, `sqlSkipRe`, and `queryResponse` from `forgeext/adminapi/query.go` — do not duplicate them.
 - The endpoint uses capability **`analytics.read`** (read-only), NOT `analytics.admin`.
-- Read-only enforcement is the handler-side precheck + write-keyword denylist + a context timeout + a row cap. There is no per-statement read-only tx (grove `RawQuery` has no dynamic `Query`, and DuckDB has no per-statement RO tx) — this is documented defense-in-depth, appropriate for a derived, reproducible read model.
+- Read-only enforcement: **Postgres** runs the query inside a `driver.TxOptions{ReadOnly: true}` transaction via `PgDB.BeginTx` → `tx.Query` (the REAL enforcement — a write errors at the DB). **DuckDB** has no per-statement read-only tx, so it relies on the handler-side precheck + write-keyword denylist + context timeout + row cap (documented defense-in-depth, appropriate for a derived, reproducible read model). The handler precheck+denylist runs for both (it is the duck enforcement and harmless-but-defense-in-depth for pg).
 - Row cap: 1000 (a package `var` so tests can shrink it).
 
 ---
@@ -449,6 +449,12 @@ func TestPgAnalytics_QueryReadOnly(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(rows))
 	}
+
+	// The READ ONLY tx is the real enforcement: a write must fail at the DB
+	// even though it bypasses the adminapi precheck here.
+	if _, _, _, werr := s.QueryReadOnly(ctx, `DELETE FROM fabriq_analytics_facts WHERE tenant_id = $1`, "t1"); werr == nil {
+		t.Fatalf("write inside read-only tx unexpectedly succeeded")
+	}
 }
 ```
 
@@ -477,14 +483,20 @@ import (
 // shrink it to exercise truncation.
 var maxAnalyticsQueryRows = 1000
 
-// QueryReadOnly runs a read-only query (already validated read-only by the
-// adminapi caller) against the Postgres analytics store and returns a dynamic
-// result set. Read-only-ness is the caller's precheck + the ctx timeout + the
-// row cap.
+// QueryReadOnly runs a query inside a READ ONLY transaction against the
+// Postgres analytics store and returns a dynamic result set. The read-only tx
+// is the REAL enforcement — a data-modifying statement (including a
+// data-modifying CTE) errors at the database, regardless of the caller's
+// precheck. The row cap bounds the result; the caller bounds time via ctx.
 func (s *Sink) QueryReadOnly(ctx context.Context, query string, args ...any) (rows []map[string]any, cols []string, truncated bool, err error) {
-	r, err := s.db.Query(ctx, query, args...)
+	tx, err := s.db.BeginTx(ctx, &driver.TxOptions{ReadOnly: true})
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, false, fmt.Errorf("fabriq: analytics query begin ro tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	r, qerr := tx.Query(ctx, query, args...)
+	if qerr != nil {
+		return nil, nil, false, qerr
 	}
 	return scanDriverMapsCapped(r, maxAnalyticsQueryRows)
 }
@@ -528,7 +540,7 @@ func scanDriverMapsCapped(r driver.Rows, limit int) (out []map[string]any, cols 
 }
 ```
 
-If `s.db.Query` does not return `driver.Rows` in this grove version, grep `adapters/pganalytics/sink.go` for an existing `s.db.Query(...)` call and match whatever row type it scans (the existing `Watermark`/`AllWatermarks` methods show the exact API).
+API confirmed against grove `pgdriver@v1.5.9`: `PgDB.BeginTx(ctx, *driver.TxOptions) (driver.Tx, error)` and `driver.Tx.Query(ctx, sql, args...) (driver.Rows, error)`; `driver.Rows` has `Columns()/Next()/Scan()/Close()/Err()` (the existing `Watermark`/`AllWatermarks`/`PurgeTenant` methods use the same handles). If a symbol differs, grep `adapters/pganalytics/sink.go` and match the actual API.
 
 - [ ] **Step 4: Run test to verify it passes**
 
