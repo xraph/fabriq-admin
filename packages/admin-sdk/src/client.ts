@@ -250,6 +250,15 @@ export interface AnalyticsPurgeResult {
   rowsDeleted: number
 }
 
+/** The dynamic result of a read-only analytics query (POST /analytics/query). */
+export interface AnalyticsQueryResult {
+  columns: string[]
+  rows: Record<string, unknown>[]
+  rowCount: number
+  truncated: boolean
+  elapsedMs: number
+}
+
 /** An async analytics bulk-op job (fleet backfill/reconcile/reproject), from the job poll. */
 export interface AnalyticsJob {
   id: string
@@ -1449,6 +1458,20 @@ export class FabriqClient {
       path: `${this.baseUrl}/analytics/jobs/${encodeURIComponent(id)}/stream`,
       signal,
     }) as AsyncIterable<AnalyticsJob>
+  }
+
+  /**
+   * POST /analytics/query — run a read-only SQL query against the analytics
+   * sink (facts / events / watermarks). Cap analytics.read. A thrown
+   * HttpTransportError with status 501 means the backend or sink can't serve
+   * analytics queries — callers fall back.
+   */
+  analyticsQuery(req: { sql: string; args?: unknown[] }): Promise<AnalyticsQueryResult> {
+    return this.transport.request<AnalyticsQueryResult>({
+      method: "POST",
+      path: `${this.baseUrl}/analytics/query`,
+      body: req,
+    })
   }
 
   /**

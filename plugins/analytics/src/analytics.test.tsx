@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from "@testing-library/react"
 import {
   FabriqClient,
   FabriqAdmin,
+  HttpTransportError,
   type FabriqTransport,
   type AnalyticsStatus,
 } from "@fabriq-ai/admin-sdk"
@@ -13,7 +14,7 @@ function makeClient(
   caps: string[],
   status?: Partial<AnalyticsStatus>,
   job?: unknown,
-  opts?: { streamThrows?: boolean; streamEvents?: unknown[] },
+  opts?: { streamThrows?: boolean; streamEvents?: unknown[]; queryUnavailable?: boolean },
 ) {
   const request = vi.fn(async (o: { path: string; body?: unknown }) => {
     const p = o.path
@@ -47,6 +48,12 @@ function makeClient(
       if (body.all) return { jobId: "j1" }
       return { counts: { [body.tenant ?? "acme"]: 7 } }
     }
+    if (p.endsWith("/analytics/query")) {
+      if (opts?.queryUnavailable) {
+        throw new HttpTransportError(501, '{"error":"analytics query not supported by this sink"}')
+      }
+      return { columns: ["aggregate", "facts"], rows: [{ aggregate: "order", facts: 3 }], rowCount: 1, truncated: false, elapsedMs: 2 }
+    }
     return {}
   })
   const streamCalls: number[] = []
@@ -69,7 +76,7 @@ function renderAnalytics(
   caps: string[],
   status?: Partial<AnalyticsStatus>,
   job?: unknown,
-  opts?: { streamThrows?: boolean; streamEvents?: unknown[] },
+  opts?: { streamThrows?: boolean; streamEvents?: unknown[]; queryUnavailable?: boolean },
 ) {
   const { client, request, streamCalls } = makeClient(caps, status, job, opts)
   render(
@@ -280,5 +287,31 @@ describe("AnalyticsPage — Privacy", () => {
     fireEvent.click(screen.getByRole("button", { name: /^reproject$/i }))
 
     await screen.findByText(/reprojected 7 rows for acme/i)
+  })
+})
+
+describe("AnalyticsPage — Query", () => {
+  it("shows the Query tab and runs a query, rendering results", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^query$/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /^run$/i }))
+    await screen.findByText("order")
+    expect(screen.getByText(/\b1 row\b/i)).toBeTruthy()
+  })
+
+  it("loads an example query into the editor", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"])
+    fireEvent.click(await screen.findByRole("button", { name: /^query$/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /recent events/i }))
+    const editor = screen.getByRole("textbox") as HTMLTextAreaElement
+    expect(editor.value).toContain("fabriq_analytics_events")
+  })
+
+  it("falls back to a neutral panel when the endpoint returns 501", async () => {
+    renderAnalytics(["analytics.read", "analytics.admin"], undefined, undefined, { queryUnavailable: true })
+    fireEvent.click(await screen.findByRole("button", { name: /^query$/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /^run$/i }))
+    await screen.findByText(/isn't available on this backend/i)
+    expect(screen.queryByText(/1 rows/i)).toBeNull()
   })
 })

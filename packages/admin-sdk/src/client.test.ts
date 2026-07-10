@@ -1056,6 +1056,18 @@ describe("FabriqClient", () => {
     expect(collected).toEqual(events)
   })
 
+  it("analyticsQuery — POST /analytics/query with the body", async () => {
+    const transport = new FakeTransport()
+    transport.setRequestResponse({ columns: ["n"], rows: [{ n: 1 }], rowCount: 1, truncated: false, elapsedMs: 2 })
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    const res = await client.analyticsQuery({ sql: "SELECT 1 AS n" })
+    expect(transport.lastRequest?.method).toBe("POST")
+    expect(transport.lastRequest?.path).toBe("http://localhost:9000/analytics/query")
+    expect(transport.lastRequest?.body).toEqual({ sql: "SELECT 1 AS n" })
+    expect(res.rowCount).toBe(1)
+    expect(res.columns).toEqual(["n"])
+  })
+
   it("migrationScaffold — POST /migrations/scaffold with name/version + optional up/down body", async () => {
     const transport = new FakeTransport()
     transport.setRequestResponse({ filename: "add_x.go", content: "package migrations" })
