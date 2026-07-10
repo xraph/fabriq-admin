@@ -296,7 +296,7 @@ describe("AnalyticsPage — Query", () => {
     fireEvent.click(await screen.findByRole("button", { name: /^query$/i }))
     fireEvent.click(await screen.findByRole("button", { name: /^run$/i }))
     await screen.findByText("order")
-    expect(screen.getByText(/1 rows/i)).toBeTruthy()
+    expect(screen.getByText(/\b1 row\b/i)).toBeTruthy()
   })
 
   it("loads an example query into the editor", async () => {

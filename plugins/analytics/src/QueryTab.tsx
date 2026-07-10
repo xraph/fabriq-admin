@@ -87,7 +87,7 @@ function QueryTabBody({ tenant }: { tenant: string }) {
         value={sql}
         onChange={(e) => setSql(e.target.value)}
         onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !busy) {
             e.preventDefault()
             run()
           }
@@ -138,7 +138,7 @@ function QueryTabBody({ tenant }: { tenant: string }) {
             </table>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{result.rowCount} rows · {result.elapsedMs} ms</span>
+            <span>{result.rowCount} row{result.rowCount === 1 ? "" : "s"} · {result.elapsedMs} ms</span>
             {result.truncated && <Badge variant="outline">truncated</Badge>}
           </div>
         </div>
