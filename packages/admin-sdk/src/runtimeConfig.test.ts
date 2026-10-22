@@ -9,9 +9,9 @@ afterEach(() => {
 describe("readRuntimeConfig", () => {
   it("window value wins over env", () => {
     vi.stubEnv("VITE_FABRIQ_API_URL", "http://env.test/admin")
-    window.__FABRIQ_ADMIN_CONFIG__ = { apiUrl: "/console/admin", basePath: "/console/" }
+    window.__FABRIQ_ADMIN_CONFIG__ = { apiUrl: "http://win.test/admin", basePath: "/console/" }
     const cfg = readRuntimeConfig()
-    expect(cfg.apiUrl).toBe("/console/admin")
+    expect(cfg.apiUrl).toBe("http://win.test/admin")
     expect(cfg.basePath).toBe("/console/")
   })
 
@@ -47,6 +47,16 @@ describe("readRuntimeConfig", () => {
     expect(cfg.dsn).toBeUndefined()
     expect(cfg.defaultTenant).toBeUndefined()
     expect(cfg.mapStyleUrl).toBeUndefined()
+  })
+
+  it("resolves a relative apiUrl against the page location", () => {
+    window.__FABRIQ_ADMIN_CONFIG__ = { apiUrl: "/console/admin" }
+    expect(readRuntimeConfig().apiUrl).toBe(`${window.location.origin}/console/admin`)
+  })
+
+  it("leaves an absolute apiUrl unchanged", () => {
+    window.__FABRIQ_ADMIN_CONFIG__ = { apiUrl: "https://api.example.com:9443/admin" }
+    expect(readRuntimeConfig().apiUrl).toBe("https://api.example.com:9443/admin")
   })
 
   it("window dsn is ignored", () => {

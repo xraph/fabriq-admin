@@ -163,6 +163,23 @@ describe("AuthGate", () => {
     expect(String(fetchSpy.mock.calls[0]![0])).toBe("http://fabriq.test/admin/meta")
   })
 
+  it("a relative runtime apiUrl probes /meta once, under the page origin", async () => {
+    window.__FABRIQ_ADMIN_CONFIG__ = { apiUrl: "/console/admin" }
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith("/meta")) return jsonResponse(META)
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal("fetch", fetchSpy)
+
+    render(<AuthGate>{() => <div>console-children</div>}</AuthGate>)
+
+    expect(await screen.findByText("console-children")).toBeInTheDocument()
+    expect(String(fetchSpy.mock.calls[0]![0])).toBe(
+      `${window.location.origin}/console/admin/meta`,
+    )
+  })
+
   it("VITE_FABRIQ_DSN set → renders children, no login, no /meta probe", async () => {
     vi.stubEnv("VITE_FABRIQ_DSN", "fabriq://testkey@localhost:8080/acme")
     const fetchSpy = vi.fn(async () => jsonResponse(META))

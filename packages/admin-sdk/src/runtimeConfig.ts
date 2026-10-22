@@ -7,7 +7,11 @@
  * as a fallback for local development.
  */
 export interface RuntimeConfig {
-  /** Admin API base URL. May be relative (e.g. "/console/admin"). */
+  /**
+   * Admin API base URL. Always absolute when a window exists: a relative value
+   * (e.g. "/console/admin") is resolved against the page location, because the
+   * HTTP transport would otherwise prefix its base onto the path twice.
+   */
   apiUrl: string
   /** Router mount path, e.g. "/" or "/console/". */
   basePath: string
@@ -26,6 +30,11 @@ declare global {
 const DEFAULT_API_URL = "http://localhost:8080/admin"
 const DEFAULT_BASE_PATH = "/"
 
+function toAbsoluteUrl(url: string): string {
+  if (typeof window === "undefined" || /^https?:\/\//i.test(url)) return url
+  return new URL(url, window.location.href).href
+}
+
 function nonEmpty(v: unknown): string | undefined {
   return typeof v === "string" && v !== "" ? v : undefined
 }
@@ -35,6 +44,10 @@ function nonEmpty(v: unknown): string | undefined {
  * tests can stub env and the window object between cases.
  *
  * Precedence per field: window object, then `import.meta.env`, then default.
+ *
+ * `apiUrl` comes back absolute when a window exists (a relative value is
+ * resolved against `window.location.href`); absolute inputs are unchanged.
+ * Without a window the raw value is returned.
  */
 export function readRuntimeConfig(): RuntimeConfig {
   const win: Partial<Record<string, unknown>> =
@@ -46,7 +59,9 @@ export function readRuntimeConfig(): RuntimeConfig {
   const env = (import.meta.env ?? {}) as Record<string, string | undefined>
 
   return {
-    apiUrl: nonEmpty(win["apiUrl"]) ?? nonEmpty(env["VITE_FABRIQ_API_URL"]) ?? DEFAULT_API_URL,
+    apiUrl: toAbsoluteUrl(
+      nonEmpty(win["apiUrl"]) ?? nonEmpty(env["VITE_FABRIQ_API_URL"]) ?? DEFAULT_API_URL,
+    ),
     basePath:
       nonEmpty(win["basePath"]) ?? nonEmpty(env["VITE_FABRIQ_BASE_PATH"]) ?? DEFAULT_BASE_PATH,
     // A dsn on the window object is deliberately ignored so a key can never
