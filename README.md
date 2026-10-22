@@ -177,18 +177,23 @@ Every release tag publishes an image to `ghcr.io/xraph/fabriq-admin` for `linux/
 
 ```bash
 docker run --rm -p 8081:8080 \
+  --add-host=host.docker.internal:host-gateway \
   -e FABRIQ_ADMIN_UPSTREAM=http://host.docker.internal:8080 \
   ghcr.io/xraph/fabriq-admin:X.Y.Z
 ```
 
+The `--add-host` line is for Linux engines, where `host.docker.internal` doesn't exist unless you add it. Docker Desktop already has it, and the flag does no harm there.
+
 The console is now on http://localhost:8081. The browser talks to `/admin` on that same origin, and nginx forwards it to your backend, so there's no CORS to sort out.
 
-Nothing is baked in at build time. The container reads its settings when it starts, writes the console's `config.js` into `/tmp`, and then hands over to nginx. Bad values stop it right there: the message goes to stderr and the exit code is 1. nginx also resolves the upstream host on startup, so the backend has to be reachable by then.
+Nothing is baked in at build time. The container reads its settings when it starts, writes the console's `config.js` into `/tmp`, and then hands over to nginx. Bad values stop it right there: the message goes to stderr and the exit code is 1.
+
+The upstream hostname has to resolve when the container starts. If it doesn't, nginx fails and the container exits 1 before it serves anything. The address it finds is then pinned until the container restarts, so restart the console whenever the Fabriq server is recreated. In Compose that's `depends_on: {fabriq: {condition: service_started, restart: true}}` on the console service. On Kubernetes, point the upstream at a Service and not at a pod.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `FABRIQ_ADMIN_UPSTREAM` | unset | Origin of the admin backend, such as `http://fabriq:8081`, with no path. When set, `/admin/` is proxied there. |
-| `FABRIQ_ADMIN_UPSTREAM_KEY` | unset | A Fabriq key (`fq_` plus 32 or more letters and digits). nginx sends it as `Authorization: Bearer` and replaces any header the browser sent. It never reaches `config.js`. Needs `FABRIQ_ADMIN_UPSTREAM`. |
+| `FABRIQ_ADMIN_UPSTREAM` | unset | Origin of the admin backend, such as `http://fabriq:8081`, with no path. When set, `/admin/` is proxied there, with the browser's `Cookie` header dropped and no body size limit (file uploads are base64 JSON). |
+| `FABRIQ_ADMIN_UPSTREAM_KEY` | unset | A Fabriq key (`fq_` plus 32 or more letters and digits). nginx sends it as `Authorization: Bearer` and replaces any header the browser sent. It never reaches `config.js`. While a key is set, requests the browser marks as cross-site or same-site get a 403. Needs `FABRIQ_ADMIN_UPSTREAM`. |
 | `FABRIQ_ADMIN_BASE_PATH` | `/` | The path prefix the browser sees, such as `/console/`. Start and end with `/`. |
 | `FABRIQ_ADMIN_API_URL` | `<base path>admin` when an upstream is set | Where the browser sends API calls. A path starting with `/`, or an `http://` or `https://` URL. |
 | `FABRIQ_ADMIN_DEFAULT_TENANT` | unset | Tenant to select when the browser has none stored yet. Up to 64 letters, digits, `-` and `_`. |
