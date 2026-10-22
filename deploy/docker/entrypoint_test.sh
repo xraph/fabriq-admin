@@ -23,7 +23,7 @@ bad() { FAIL=$((FAIL + 1)); printf 'FAIL  %s\n' "$1"; }
 run_script() {
   rm -rf "$TMP/html" "$TMP/runtime"
   mkdir -p "$TMP/html"
-  printf '<html><head><base href="/" /></head><body></body></html>\n' > "$TMP/html/index.html"
+  printf '<html><head>%s</head><body></body></html>\n' "${FIXTURE_HEAD-<base href=\"/\" />}" > "$TMP/html/index.html"
   RUNTIME="$TMP/runtime"
   env -i PATH="$PATH" \
     FABRIQ_ADMIN_RUNTIME_DIR="$RUNTIME" \
@@ -64,11 +64,23 @@ expect_has upstream "$RUNTIME/config.js" '"apiUrl":"/admin"'
 expect_has upstream "$RUNTIME/upstream.conf" 'proxy_pass http://fabriq:8081;'
 expect_has upstream "$RUNTIME/upstream.conf" 'location /admin/ {'
 expect_lacks upstream "$RUNTIME/upstream.conf" 'Authorization'
+expect_has upstream "$RUNTIME/upstream.conf" 'client_max_body_size 0;'
+expect_has upstream "$RUNTIME/upstream.conf" 'proxy_request_buffering off;'
+expect_has upstream "$RUNTIME/upstream.conf" 'proxy_set_header Cookie "";'
+expect_lacks upstream "$RUNTIME/upstream.conf" 'sec_fetch_site'
+expect_lacks upstream "$RUNTIME/upstream.conf" 'proxy_ssl_server_name'
 
 # upstream-key
 run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY=$VALID_KEY
 expect_exit upstream-key 0
 expect_has upstream-key "$RUNTIME/upstream.conf" "proxy_set_header Authorization \"Bearer $VALID_KEY\";"
+expect_has upstream-key "$RUNTIME/upstream.conf" 'if ($http_sec_fetch_site ~ "^(cross-site|same-site)$") {'
+expect_has upstream-key "$RUNTIME/upstream.conf" 'proxy_set_header Cookie "";'
+
+# https upstream: SNI on
+run_script FABRIQ_ADMIN_UPSTREAM=https://fabriq.example.com
+expect_exit upstream-https 0
+expect_has upstream-https "$RUNTIME/upstream.conf" 'proxy_ssl_server_name on;'
 
 # base-path
 run_script FABRIQ_ADMIN_BASE_PATH=/console/ FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081
@@ -91,6 +103,13 @@ run_script FABRIQ_ADMIN_BASE_PATH=bad
 expect_exit bad-base-path-relative 1
 run_script FABRIQ_ADMIN_BASE_PATH='/console'
 expect_exit bad-base-path-no-trailing-slash 1
+
+run_script FABRIQ_ADMIN_BASE_PATH=/./
+expect_exit bad-base-path-dot 1
+run_script FABRIQ_ADMIN_BASE_PATH=/../
+expect_exit bad-base-path-dotdot 1
+run_script FABRIQ_ADMIN_BASE_PATH=/a/../b/
+expect_exit bad-base-path-dotdot-inner 1
 
 # bad-upstream
 run_script FABRIQ_ADMIN_UPSTREAM='http://a;b'
@@ -115,6 +134,20 @@ expect_exit bad-newline-base-path 1
 run_script FABRIQ_ADMIN_DEFAULT_TENANT="acme${NL}x"
 expect_exit bad-newline-tenant 1
 
+# Characters that could break out of an nginx string or directive, in each
+# value that is written into the nginx config or the index.html rewrite.
+CR=$(printf '\r')
+n=0
+for c in '"' "'" ';' ' ' '$' '{' '}' '\' "$CR"; do
+  n=$((n + 1))
+  run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY="$VALID_KEY$c"
+  expect_exit "bad-key-char-$n" 1
+  run_script FABRIQ_ADMIN_UPSTREAM="http://fabriq:8081$c"
+  expect_exit "bad-upstream-char-$n" 1
+  run_script FABRIQ_ADMIN_BASE_PATH="/con${c}sole/"
+  expect_exit "bad-base-path-char-$n" 1
+done
+
 # bad-tenant
 run_script FABRIQ_ADMIN_DEFAULT_TENANT='a b'
 expect_exit bad-tenant 1
@@ -124,6 +157,14 @@ run_script FABRIQ_ADMIN_API_URL='ftp://x'
 expect_exit bad-api-url 1
 run_script FABRIQ_ADMIN_MAP_STYLE_URL='/style.json'
 expect_exit bad-map-style-url 1
+run_script FABRIQ_ADMIN_API_URL='//evil.example.com/admin'
+expect_exit bad-api-url-protocol-relative 1
+
+# a built index.html without <base href="/"> cannot be rewritten
+FIXTURE_HEAD='<title>x</title>'
+run_script
+unset FIXTURE_HEAD
+expect_exit no-base-href 1
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

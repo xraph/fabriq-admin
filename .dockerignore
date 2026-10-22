@@ -5,3 +5,5 @@ node_modules
 docs/screenshots
 .superpowers
 .claude
+**/.env*
+**/*.local

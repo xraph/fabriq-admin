@@ -40,6 +40,10 @@ check() {
 
 check FABRIQ_ADMIN_BASE_PATH "$BASE_PATH" '^/([A-Za-z0-9._~-]+/)*$' \
   'a path that starts and ends with / (for example /console/)'
+# The regex allows dots inside names; reject whole . and .. segments.
+case $BASE_PATH in
+  */./* | */../*) fail "FABRIQ_ADMIN_BASE_PATH must not contain . or .. segments" ;;
+esac
 
 if [ -n "$UPSTREAM" ]; then
   check FABRIQ_ADMIN_UPSTREAM "$UPSTREAM" '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$' \
@@ -54,6 +58,9 @@ fi
 
 if [ -n "$API_URL" ]; then
   check FABRIQ_ADMIN_API_URL "$API_URL" '^(/|https?://)' 'a path starting with / or an http(s) URL'
+  case $API_URL in
+    //*) fail "FABRIQ_ADMIN_API_URL must not start with // (protocol-relative)" ;;
+  esac
 fi
 
 if [ -n "$DEFAULT_TENANT" ]; then
@@ -71,7 +78,7 @@ if [ -z "$API_URL" ] && [ -n "$UPSTREAM" ]; then
 fi
 
 grep -Fq '<base href="/"' "$HTML_DIR/index.html" ||
-  fail "$HTML_DIR/index.html has no <base href=\"/\"> to rewrite"
+  fail "$HTML_DIR/index.html (FABRIQ_ADMIN_HTML_DIR) has no <base href=\"/\"> to rewrite"
 
 mkdir -p "$RUNTIME_DIR"
 
@@ -90,19 +97,36 @@ printf 'window.__FABRIQ_ADMIN_CONFIG__ = %s;\n' "$CONFIG" > "$RUNTIME_DIR/config
 # index.html: the base path only holds [A-Za-z0-9._~/-], so | is a safe delimiter.
 sed "s|<base href=\"/\"|<base href=\"${BASE_PATH}\"|" "$HTML_DIR/index.html" > "$RUNTIME_DIR/index.html"
 
-# upstream.conf: empty unless an upstream is set. With a key, the Authorization
-# header is always replaced, so a client cannot send its own credentials through.
+# upstream.conf: empty unless an upstream is set.
+#
+# The block is hardened for a bearer-only API behind a browser console:
+#   - Cookie is always cleared, so a session cookie from a fronting proxy never
+#     reaches Fabriq.
+#   - Uploads are base64 JSON, so the body size limit and request buffering are
+#     off (the 1 MB default would answer 413).
+#   - With a key, Authorization is always replaced, so a client cannot send its
+#     own credentials through, and requests the browser marks as cross-site or
+#     same-site are refused (403), so another site cannot borrow the key.
 : > "$RUNTIME_DIR/upstream.conf"
 if [ -n "$UPSTREAM" ]; then
   {
     printf 'location /admin/ {\n'
     printf '  proxy_pass %s;\n' "$UPSTREAM"
+    case $UPSTREAM in
+      https://*) printf '  proxy_ssl_server_name on;\n' ;;
+    esac
     printf '  proxy_http_version 1.1;\n'
     printf '  proxy_set_header Host $proxy_host;\n'
     printf '  proxy_set_header Connection "";\n'
+    printf '  proxy_set_header Cookie "";\n'
     printf '  proxy_buffering off;\n'
+    printf '  proxy_request_buffering off;\n'
+    printf '  client_max_body_size 0;\n'
     printf '  proxy_read_timeout 3600s;\n'
     if [ -n "$UPSTREAM_KEY" ]; then
+      printf '  if ($http_sec_fetch_site ~ "^(cross-site|same-site)$") {\n'
+      printf '    return 403;\n'
+      printf '  }\n'
       printf '  proxy_set_header Authorization "Bearer %s";\n' "$UPSTREAM_KEY"
     fi
     printf '}\n'

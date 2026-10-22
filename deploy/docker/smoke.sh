@@ -58,14 +58,31 @@ docker run -d --name "$CONSOLE" --network "$NET" --read-only --tmpfs /tmp \
   -e FABRIQ_ADMIN_DEFAULT_TENANT=acme \
   "$IMAGE" >/dev/null
 
-# The upstream has to resolve and answer before the proxy check, so wait on
-# the echo server too, through the console.
+# /healthz only proves nginx is up. The echo server may still be starting, so
+# the proxy checks below retry (see proxy_get).
 i=0
 until curl -fsS "$URL/healthz" >/dev/null 2>&1; do
   i=$((i + 1))
   [ "$i" -le 30 ] || fail "console did not become healthy within 30s"
   sleep 1
 done
+
+# proxy_get <curl args...>: GET through the console, retrying for up to 15s
+# while the upstream answers 502/503/504 or refuses connections.
+proxy_get() {
+  n=0
+  until out=$(curl -fsS "$@" 2>/dev/null); do
+    n=$((n + 1))
+    [ "$n" -le 15 ] || fail "no 2xx from the proxy within 15s: curl $*"
+    sleep 1
+  done
+  printf '%s' "$out"
+}
+
+# status_of <curl args...>: HTTP status code only
+status_of() {
+  curl -s -o /dev/null -w '%{http_code}' "$@"
+}
 
 # healthz
 [ "$(curl -sS "$URL/healthz")" = "ok" ] || fail "/healthz body is not ok"
@@ -88,7 +105,8 @@ for p in / /entities/x; do
   BODY=$(curl -fsS "$URL$p")
   case $BODY in *'<base href="/console/"'*) ;; *) fail "$p lacks <base href=\"/console/\">" ;; esac
 done
-echo "smoke: ok base path on / and /entities/x"
+curl -fsSI "$URL/entities/x" | grep -qi '^cache-control: no-store' || fail "the SPA fallback is cacheable"
+echo "smoke: ok base path and no-store on / and /entities/x"
 
 # built assets
 ASSET=$(curl -fsS "$URL/" | grep -o 'assets/[A-Za-z0-9._-]*\.js' | head -n 1)
@@ -97,11 +115,20 @@ ASSET=$(curl -fsS "$URL/" | grep -o 'assets/[A-Za-z0-9._-]*\.js' | head -n 1)
 curl -fsSI "$URL/$ASSET" | grep -qi '^cache-control: public, max-age=31536000, immutable' || fail "$ASSET is not immutable"
 echo "smoke: ok $ASSET"
 
-# proxy: path kept, client Authorization replaced by the configured key
-ECHO=$(curl -fsS -H 'Authorization: Bearer wrong' "$URL/admin/meta")
+# proxy: path kept, client Authorization replaced by the configured key, and
+# the client's Cookie never forwarded
+ECHO=$(proxy_get -H 'Authorization: Bearer wrong' -H 'Cookie: s=secret' "$URL/admin/meta")
 [ "$(printf '%s' "$ECHO" | jq -r .path)" = "/admin/meta" ] || fail "upstream saw the wrong path: $ECHO"
 [ "$(printf '%s' "$ECHO" | jq -r .headers.authorization)" = "Bearer $KEY" ] || fail "upstream saw the wrong authorization: $ECHO"
-echo "smoke: ok /admin/ proxy with key injection"
+[ "$(printf '%s' "$ECHO" | jq -r .headers.cookie)" = "null" ] || fail "upstream saw a cookie: $ECHO"
+echo "smoke: ok /admin/ proxy with key injection and no cookies"
+
+# cross-site and same-site requests are refused while a key is injected
+[ "$(status_of -H 'Sec-Fetch-Site: cross-site' "$URL/admin/meta")" = "403" ] || fail "cross-site request was not refused"
+[ "$(status_of -H 'Sec-Fetch-Site: same-site' "$URL/admin/meta")" = "403" ] || fail "same-site request was not refused"
+proxy_get -H 'Sec-Fetch-Site: same-origin' "$URL/admin/meta" >/dev/null
+proxy_get "$URL/admin/meta" >/dev/null
+echo "smoke: ok Sec-Fetch-Site 403 for cross-site and same-site, 200 for same-origin and none"
 
 # invalid env must stop the container before nginx starts
 docker run -d --name "$BAD" -e FABRIQ_ADMIN_BASE_PATH=bad "$IMAGE" >/dev/null
@@ -112,7 +139,8 @@ until [ "$(docker inspect -f '{{.State.Status}}' "$BAD")" = "exited" ]; do
   sleep 1
 done
 CODE=$(docker inspect -f '{{.State.ExitCode}}' "$BAD")
-[ "$CODE" != "0" ] || fail "container with an invalid base path exited 0"
-echo "smoke: ok invalid FABRIQ_ADMIN_BASE_PATH exits $CODE"
+[ "$CODE" = "1" ] || fail "container with an invalid base path exited $CODE, wanted 1"
+docker logs "$BAD" 2>&1 | grep -q FABRIQ_ADMIN_BASE_PATH || fail "the logs do not name FABRIQ_ADMIN_BASE_PATH"
+echo "smoke: ok invalid FABRIQ_ADMIN_BASE_PATH exits 1 and is named in the logs"
 
 echo "smoke: ok"

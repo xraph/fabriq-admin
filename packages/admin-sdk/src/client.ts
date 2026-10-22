@@ -2063,9 +2063,10 @@ export class FabriqClient {
   // -------------------------------------------------------------------------
 
   /**
-   * GET /tenants — list the tenant catalog. Tolerates the `{tenants}` envelope
-   * the server returns, an `{items}` envelope, and a bare array. A backend without the tenants.admin capability
-   * surfaces as a thrown HttpTransportError (404/501).
+   * GET /tenants: list the tenant catalog. Tolerates the `{tenants}` envelope
+   * the server returns, an `{items}` envelope, and a bare array. A backend
+   * without the tenants.admin capability surfaces as a thrown
+   * HttpTransportError (404/501).
    */
   async listTenants(): Promise<TenantSummary[]> {
     const res = await this.transport.request<
