@@ -16,56 +16,14 @@ permissions:
   contents: read
 
 jobs:
-  # Typecheck ("lint"): the workspace has no ESLint — the static-analysis gate
-  # is the TypeScript compiler, run via each package's `build` (tsc -p ...).
-  # This also validates the vite builds for the apps.
-  typecheck:
-    name: Typecheck & build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.0
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build (tsc typecheck + app bundles)
-        run: pnpm -r build
-
-  test:
-    name: Unit tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.0
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Test (vitest)
-        run: pnpm test
+  # Typecheck, build and unit tests run through the shared node-ci workflow.
+  # The workspace has no ESLint or `typecheck` script: the static-analysis gate
+  # is the TypeScript compiler, run via each package's `build` (tsc -p ...), so
+  # the build step is the typecheck. It also validates the vite app bundles.
+  ci:
+    uses: xraph/workflows/.github/workflows/node-ci.yml@v1
+    with:
+      scripts: '["test","build"]'
 
   # Container image: the entrypoint script tests need no docker, then the smoke
   # script builds the image and runs it read-only beside an echo upstream.
