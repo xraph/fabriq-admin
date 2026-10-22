@@ -1,12 +1,15 @@
 name: Release
 
-# Tag-triggered npm release for the @fabriq-ai/* packages.
+# Tag-triggered release: the @fabriq-ai/* npm packages, and the console
+# container image on ghcr.io (ghcr.io/xraph/fabriq-admin).
 #
-# Lockstep versioning: pushing a `vX.Y.Z` tag stamps EVERY publishable
-# workspace package (packages/* + plugins/*) to that version and publishes
-# them together to the public npm registry under the @fabriq-ai scope. The
-# two apps (apps/host, apps/remote-example) are `private: true` and are
-# skipped automatically by `pnpm -r publish`.
+# Lockstep versioning: pushing a `vX.Y.Z` tag runs the shared CI workflow
+# (test + build) on the tagged commit. Once it passes, every publishable
+# workspace package (packages/* + plugins/*) is stamped to that version and
+# published to the public npm registry under the @fabriq-ai scope, in
+# dependency order, through xraph/workflows' npm-publish.yml. The two apps
+# (apps/host, apps/remote-example) are `private: true` and are not in the
+# `packages` list, so they are never published.
 #
 #   git tag v0.2.0 && git push origin v0.2.0
 #
@@ -15,9 +18,15 @@ name: Release
 #
 # Pre-release suffixes (v0.2.0-rc.1) publish under the `next` dist-tag instead
 # of `latest`, so `npm install @fabriq-ai/ui` never resolves a pre-release.
+# Every version is published with an npm provenance attestation. A re-run skips
+# versions already on the registry, so a half-finished release can be resumed.
+#
+# The image is built for linux/amd64 and linux/arm64 and tagged :X.Y.Z, plus
+# :X.Y for stable releases (no pre-release suffix). It runs independently of
+# CI and the npm publish, so a failure in one does not block the other.
 #
 # Requires an NPM_TOKEN secret: an npm automation token with publish rights to
-# the @fabriq-ai org.
+# the @fabriq-ai org. The image push uses the workflow's own GITHUB_TOKEN.
 on:
   push:
     tags:
@@ -32,67 +41,141 @@ permissions:
   contents: read
 
 jobs:
-  npm:
+  # Same gate as ci.yml, run on the tagged commit before anything is published.
+  ci:
+    uses: xraph/workflows/.github/workflows/node-ci.yml@v1
+    with:
+      scripts: '["test","build"]'
+
+  # The expression language has no string replace, and npm-publish.yml refuses
+  # a version with a leading v, so the tag is trimmed here. The dist-tag is
+  # picked here too: npm 11 won't publish a pre-release without one.
+  prepare:
+    name: Resolve version and dist-tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      dist-tag: ${{ steps.resolve.outputs.dist_tag }}
+    steps:
+      - id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+          # A '-' before any '+build' metadata marks a pre-release in semver.
+          # Build metadata is cut first so 1.2.3+build-7 still counts as stable.
+          case "${version%%+*}" in
+            *-*) echo "dist_tag=next" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "dist_tag=latest" >> "$GITHUB_OUTPUT" ;;
+          esac
+          echo "Releasing ${version}"
+
+  publish:
     name: Publish @fabriq-ai packages
+    needs: [ci, prepare]
+    # Provenance mints an OIDC token, and a called workflow only gets the
+    # permissions its caller grants, so id-token: write has to be granted here.
+    permissions:
+      contents: read
+      id-token: write
+    uses: xraph/workflows/.github/workflows/npm-publish.yml@v1
+    with:
+      package-manager: pnpm
+      # Every publishable package under packages/* and plugins/* (25), with
+      # dependencies first. Derived by topologically sorting each package.json's
+      # dependencies and peerDependencies on other @fabriq-ai packages: ui, then
+      # admin-sdk (which needs ui), then the plugins (which need both),
+      # alphabetically. Add a new package here, after anything it depends on.
+      packages: |-
+        [
+          "packages/ui",
+          "packages/admin-sdk",
+          "plugins/analytics",
+          "plugins/api-console",
+          "plugins/cache",
+          "plugins/commands",
+          "plugins/connection",
+          "plugins/crdt",
+          "plugins/distill",
+          "plugins/entity-browser",
+          "plugins/events",
+          "plugins/files",
+          "plugins/graph",
+          "plugins/live",
+          "plugins/migrations",
+          "plugins/overview",
+          "plugins/plugins-manager",
+          "plugins/projections",
+          "plugins/query",
+          "plugins/recall",
+          "plugins/search",
+          "plugins/spatial",
+          "plugins/telemetry",
+          "plugins/tenants",
+          "plugins/types"
+        ]
+      version: ${{ needs.prepare.outputs.version }}
+      dist-tag: ${{ needs.prepare.outputs.dist-tag }}
+      # Each package.json has a repository field naming this repository.
+      provenance: true
+      dry-run: false
+      build-script: build
+      # Lets a re-run finish a release that died part way through the list.
+      skip-existing: true
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  image:
+    name: Publish container image
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # npm provenance (--provenance) attestation
+      packages: write # push to ghcr.io
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
         with:
-          version: 9.12.0
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: "https://registry.npmjs.org"
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Resolve version + dist-tag from the tag
+      - name: Resolve image tags from the tag
         id: ver
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          # Anything with a pre-release suffix (contains a '-') ships as `next`.
-          if printf '%s' "$VERSION" | grep -q '-'; then
-            echo "dist_tag=next" >> "$GITHUB_OUTPUT"
-          else
-            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
-          fi
-          echo "Releasing ${VERSION}"
+          MAJOR_MINOR="$(printf '%s' "$VERSION" | cut -d. -f1,2)"
+          {
+            echo "version=${VERSION}"
+            echo "tags<<EOF"
+            echo "ghcr.io/xraph/fabriq-admin:${VERSION}"
+            # Pre-release suffixes (contains a '-') never move the :X.Y tag.
+            if ! printf '%s' "$VERSION" | grep -q '-'; then
+              echo "ghcr.io/xraph/fabriq-admin:${MAJOR_MINOR}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Build
-        run: pnpm -r build
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.ver.outputs.tags }}
 
-      - name: Test
-        run: pnpm test
-
-      - name: Stamp workspace versions to the tag (lockstep)
-        run: |
-          set -euo pipefail
-          # Bump every workspace package to the tag version. Private apps are
-          # bumped too but harmless — they are never published. workspace:*
-          # deps are rewritten to the concrete version by pnpm at publish time.
-          pnpm -r exec npm version "${{ steps.ver.outputs.version }}" \
-            --no-git-tag-version --allow-same-version
-
-      - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
-        run: |
-          set -euo pipefail
-          pnpm -r publish \
-            --access public \
-            --tag "${{ steps.ver.outputs.dist_tag }}" \
-            --no-git-checks
+      - name: Inspect the pushed image
+        run: docker buildx imagetools inspect "ghcr.io/xraph/fabriq-admin:${{ steps.ver.outputs.version }}"

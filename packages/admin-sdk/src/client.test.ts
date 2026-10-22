@@ -1163,6 +1163,26 @@ describe("FabriqClient — tenants", () => {
     expect(transport.lastRequest?.path).toBe("http://localhost:9000/tenants")
   })
 
+  it("listTenants reads the { tenants } envelope", async () => {
+    const transport = new FakeTransport()
+    const tenants = [
+      {
+        tenantId: "acme",
+        clusterId: "c1",
+        database: "tnt_acme",
+        state: "active",
+        version: 3,
+        label: "Acme",
+        mode: "catalog",
+        createdAt: "2026-01-01T00:00:00Z",
+      },
+    ]
+    transport.setRequestResponse({ tenants })
+
+    const client = new FabriqClient({ baseUrl: "http://localhost:9000", transport })
+    expect(await client.listTenants()).toEqual(tenants)
+  })
+
   it("listTenants — tolerates a bare array response", async () => {
     const transport = new FakeTransport()
     const items = [

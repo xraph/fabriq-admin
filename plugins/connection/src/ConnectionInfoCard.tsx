@@ -1,15 +1,19 @@
-import { getSessionToken, buildDsn, type FabriqClient } from "@fabriq-ai/admin-sdk"
+import { getSessionToken, buildDsn, readRuntimeConfig, type FabriqClient } from "@fabriq-ai/admin-sdk"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Badge } from "@fabriq-ai/ui"
 import { CopyField, maskDsnCredential } from "./CopyField"
 
-/** Parse an HTTP base URL (e.g. http://localhost:8080/admin) into DSN parts. */
+/**
+ * Parse an HTTP base URL (e.g. http://localhost:8080/admin) into DSN parts.
+ * A relative base (e.g. /console/admin, as written by the container) is
+ * resolved against the page location.
+ */
 export function connectionFromBaseUrl(baseUrl: string): {
   host: string
   port: number
   tls: boolean
   basePath: string
 } {
-  const u = new URL(baseUrl)
+  const u = new URL(baseUrl, window.location.href)
   const tls = u.protocol === "https:"
   const port = u.port ? Number(u.port) : tls ? 443 : 80
   const basePath = u.pathname.replace(/\/$/, "") || "/admin"
@@ -17,8 +21,7 @@ export function connectionFromBaseUrl(baseUrl: string): {
 }
 
 function readEnvDsn(): string | undefined {
-  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
-  return env?.["VITE_FABRIQ_DSN"]
+  return readRuntimeConfig().dsn
 }
 
 function authMode(): "dsn" | "session" | "none" {

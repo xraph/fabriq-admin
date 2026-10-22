@@ -862,6 +862,9 @@ export interface TenantSummary {
   state: TenantState
   /** Schema/migration version the tenant's database is at. */
   version: number
+  label?: string
+  mode?: "static" | "catalog"
+  createdAt?: string
 }
 
 /** Where a tenant's database physically lives. */
@@ -2060,16 +2063,19 @@ export class FabriqClient {
   // -------------------------------------------------------------------------
 
   /**
-   * GET /tenants — list the tenant catalog. Tolerates both an envelope
-   * (`{items}`) and a bare array. A backend without the tenants.admin capability
-   * surfaces as a thrown HttpTransportError (404/501).
+   * GET /tenants: list the tenant catalog. Tolerates the `{tenants}` envelope
+   * the server returns, an `{items}` envelope, and a bare array. A backend
+   * without the tenants.admin capability surfaces as a thrown
+   * HttpTransportError (404/501).
    */
   async listTenants(): Promise<TenantSummary[]> {
-    const res = await this.transport.request<{ items?: TenantSummary[] } | TenantSummary[]>({
+    const res = await this.transport.request<
+      { tenants?: TenantSummary[]; items?: TenantSummary[] } | TenantSummary[]
+    >({
       method: "GET",
       path: `${this.baseUrl}/tenants`,
     })
-    return Array.isArray(res) ? res : (res?.items ?? [])
+    return Array.isArray(res) ? res : (res?.tenants ?? res?.items ?? [])
   }
 
   /** GET /tenants/:id — one tenant's state, version, and placement. */

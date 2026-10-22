@@ -3,6 +3,7 @@ import {
   FabriqAdmin,
   FabriqClient,
   createTenantStore,
+  readRuntimeConfig,
   loadRemotePlugin,
   compositePluginStore,
   httpPluginStore,
@@ -49,6 +50,11 @@ const federationRuntime = {
 }
 
 const tenantStore = createTenantStore()
+
+// Seed the active tenant from runtime config on first load only; an existing
+// (persisted) selection always wins.
+const { defaultTenant } = readRuntimeConfig()
+if (defaultTenant && !tenantStore.get()) tenantStore.set(defaultTenant)
 
 // Builtin plugins — always mounted. Overview is first (order 0 / index route "").
 const plugins = [
@@ -100,6 +106,7 @@ function Console({ client }: { client: FabriqClient }) {
 
   return (
     // routing="path": real URLs; production static hosting needs an SPA rewrite to index.html (Vite dev already SPA-falls-back).
+    // path comes from runtime config (config.js) so one bundle can mount under any prefix.
     <FabriqAdmin
       client={client}
       plugins={plugins}
@@ -115,7 +122,7 @@ function Console({ client }: { client: FabriqClient }) {
         })
       }
       routing="path"
-      path="/"
+      path={readRuntimeConfig().basePath}
     />
   )
 }
