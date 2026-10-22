@@ -171,6 +171,37 @@ Then add its `remoteEntry.js` URL from the **Plugins** page to load it into the 
 
 ---
 
+## Run the container
+
+Every release tag publishes an image to `ghcr.io/xraph/fabriq-admin` for `linux/amd64` and `linux/arm64`, tagged `X.Y.Z` and (for stable releases) `X.Y`. Point it at your Fabriq admin backend and open the port:
+
+```bash
+docker run --rm -p 8081:8080 \
+  -e FABRIQ_ADMIN_UPSTREAM=http://host.docker.internal:8080 \
+  ghcr.io/xraph/fabriq-admin:X.Y.Z
+```
+
+The console is now on http://localhost:8081. The browser talks to `/admin` on that same origin, and nginx forwards it to your backend, so there's no CORS to sort out.
+
+Nothing is baked in at build time. The container reads its settings when it starts, writes the console's `config.js` into `/tmp`, and then hands over to nginx. Bad values stop it right there: the message goes to stderr and the exit code is 1. nginx also resolves the upstream host on startup, so the backend has to be reachable by then.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `FABRIQ_ADMIN_UPSTREAM` | unset | Origin of the admin backend, such as `http://fabriq:8081`, with no path. When set, `/admin/` is proxied there. |
+| `FABRIQ_ADMIN_UPSTREAM_KEY` | unset | A Fabriq key (`fq_` plus 32 or more letters and digits). nginx sends it as `Authorization: Bearer` and replaces any header the browser sent. It never reaches `config.js`. Needs `FABRIQ_ADMIN_UPSTREAM`. |
+| `FABRIQ_ADMIN_BASE_PATH` | `/` | The path prefix the browser sees, such as `/console/`. Start and end with `/`. |
+| `FABRIQ_ADMIN_API_URL` | `<base path>admin` when an upstream is set | Where the browser sends API calls. A path starting with `/`, or an `http://` or `https://` URL. |
+| `FABRIQ_ADMIN_DEFAULT_TENANT` | unset | Tenant to select when the browser has none stored yet. Up to 64 letters, digits, `-` and `_`. |
+| `FABRIQ_ADMIN_MAP_STYLE_URL` | unset | Style URL for the Spatial map. `http://` or `https://`. |
+
+The container always serves from `/`. If you run it behind a proxy under a prefix, let the proxy strip the prefix before forwarding and set `FABRIQ_ADMIN_BASE_PATH` to the same prefix, so links and assets resolve in the browser.
+
+It listens on 8080, runs as uid 101, and only needs `/tmp` to be writable, so `--read-only --tmpfs /tmp` works. `GET /healthz` returns `ok`.
+
+To build it yourself, run `docker build -t fabriq-admin .` from the repo root. `sh deploy/docker/smoke.sh` builds the image and checks the whole contract against an echo server.
+
+---
+
 ## Embedding in your app
 
 ```tsx

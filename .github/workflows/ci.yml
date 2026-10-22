@@ -66,3 +66,21 @@ jobs:
 
       - name: Test (vitest)
         run: pnpm test
+
+  # Container image: the entrypoint script tests need no docker, then the smoke
+  # script builds the image and runs it read-only beside an echo upstream.
+  image:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Entrypoint tests
+        run: sh deploy/docker/entrypoint_test.sh
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Smoke test
+        run: sh deploy/docker/smoke.sh

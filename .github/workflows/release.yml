@@ -1,6 +1,7 @@
 name: Release
 
-# Tag-triggered npm release for the @fabriq-ai/* packages.
+# Tag-triggered release: the @fabriq-ai/* npm packages, and the console
+# container image on ghcr.io (ghcr.io/xraph/fabriq-admin).
 #
 # Lockstep versioning: pushing a `vX.Y.Z` tag stamps EVERY publishable
 # workspace package (packages/* + plugins/*) to that version and publishes
@@ -16,8 +17,12 @@ name: Release
 # Pre-release suffixes (v0.2.0-rc.1) publish under the `next` dist-tag instead
 # of `latest`, so `npm install @fabriq-ai/ui` never resolves a pre-release.
 #
+# The image is built for linux/amd64 and linux/arm64 and tagged :X.Y.Z, plus
+# :X.Y for stable releases (no pre-release suffix). It runs independently of
+# the npm job, so a failure in one does not block the other.
+#
 # Requires an NPM_TOKEN secret: an npm automation token with publish rights to
-# the @fabriq-ai org.
+# the @fabriq-ai org. The image push uses the workflow's own GITHUB_TOKEN.
 on:
   push:
     tags:
@@ -96,3 +101,56 @@ jobs:
             --access public \
             --tag "${{ steps.ver.outputs.dist_tag }}" \
             --no-git-checks
+
+  image:
+    name: Publish container image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image tags from the tag
+        id: ver
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          MAJOR_MINOR="$(printf '%s' "$VERSION" | cut -d. -f1,2)"
+          {
+            echo "version=${VERSION}"
+            echo "tags<<EOF"
+            echo "ghcr.io/xraph/fabriq-admin:${VERSION}"
+            # Pre-release suffixes (contains a '-') never move the :X.Y tag.
+            if ! printf '%s' "$VERSION" | grep -q '-'; then
+              echo "ghcr.io/xraph/fabriq-admin:${MAJOR_MINOR}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.ver.outputs.tags }}
+
+      - name: Inspect the pushed image
+        run: docker buildx imagetools inspect "ghcr.io/xraph/fabriq-admin:${{ steps.ver.outputs.version }}"
