@@ -5,6 +5,7 @@ import {
   createHttpTransport,
   createTenantStore,
   getSessionToken,
+  readRuntimeConfig,
   setSessionToken,
   clearSessionToken,
   HttpTransportError,
@@ -73,21 +74,10 @@ function withUnauthorizedHandler(
 // ---------------------------------------------------------------------------
 // Client construction
 //
-// Env vars are read lazily (inside the component, not at module scope) so
-// that tests can flip VITE_FABRIQ_DSN between cases via vi.stubEnv without
-// needing to re-import the module.
+// Configuration is read lazily (inside the component, not at module scope) so
+// that tests can flip VITE_FABRIQ_DSN or window.__FABRIQ_ADMIN_CONFIG__
+// between cases without needing to re-import the module.
 // ---------------------------------------------------------------------------
-
-function readBaseUrl(): string {
-  return (
-    (import.meta.env as Record<string, string | undefined>)["VITE_FABRIQ_API_URL"] ??
-    "http://localhost:8080/admin"
-  )
-}
-
-function readDsn(): string | undefined {
-  return (import.meta.env as Record<string, string | undefined>)["VITE_FABRIQ_DSN"]
-}
 
 // Which branch of the precedence built the current authenticated client.
 // Only "token" has a real session to log out of — see AuthActionsContext.
@@ -131,7 +121,7 @@ export interface AuthGateProps {
  */
 export function AuthGate({ children, tenantStore }: AuthGateProps) {
   const store = useMemo(() => tenantStore ?? createTenantStore(), [tenantStore])
-  const baseUrl = useMemo(readBaseUrl, [])
+  const baseUrl = useMemo(() => readRuntimeConfig().apiUrl, [])
   const [state, setState] = useState<GateState>({ kind: "loading" })
   // Avoids setting state after unmount (probe resolves after navigation away).
   const mountedRef = useRef(true)
@@ -145,7 +135,7 @@ export function AuthGate({ children, tenantStore }: AuthGateProps) {
   useEffect(() => {
     // 1. DSN branch — fully determines the client; auth is out of band (the
     // DSN carries its own key), so never gate behind a login screen.
-    const dsn = readDsn()
+    const dsn = readRuntimeConfig().dsn
     if (dsn) {
       setState({ kind: "authenticated", client: connect(dsn), mode: "dsn" })
       return

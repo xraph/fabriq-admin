@@ -1,13 +1,12 @@
 import { useEffect, useRef } from "react"
 import maplibregl from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
-import type { SpatialMatch } from "@fabriq-ai/admin-sdk"
+import { readRuntimeConfig, type SpatialMatch } from "@fabriq-ai/admin-sdk"
 
 const DEFAULT_STYLE = "https://demotiles.maplibre.org/style.json"
 
 function styleUrl(): string {
-  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
-  return env?.["VITE_FABRIQ_MAP_STYLE_URL"] || DEFAULT_STYLE
+  return readRuntimeConfig().mapStyleUrl || DEFAULT_STYLE
 }
 
 // Nearest (green) → farthest (red).

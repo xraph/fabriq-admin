@@ -21,6 +21,9 @@ import tailwindcss from "@tailwindcss/vite"
  * remotes are registered at runtime by URL.
  */
 export default defineConfig({
+  // Relative asset URLs: the container rewrites <base href> to the deployment
+  // prefix, so the same bundle works under any path.
+  base: "./",
   resolve: {
     alias: {
       // @fabriq-ai/ui's source uses the shadcn "@/..." convention for its own

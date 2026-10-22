@@ -9,6 +9,7 @@ import {
   type FabriqTransport,
 } from "@fabriq-ai/admin-sdk"
 import { connectionPlugin } from "./index"
+import { connectionFromBaseUrl } from "./ConnectionInfoCard"
 
 function makeClient(handler: (o: any) => unknown) {
   const request = vi.fn(async (o: any) => handler(o))
@@ -43,6 +44,23 @@ describe("connection plugin", () => {
     )
     await waitFor(() => expect(screen.getByText("localhost:8080")).toBeTruthy())
     expect(screen.getByText("/admin")).toBeTruthy()
+  })
+
+  it("connectionFromBaseUrl resolves a relative base against the page origin", () => {
+    // jsdom's default location is http://localhost:3000/
+    const c = connectionFromBaseUrl("/console/admin")
+    expect(c).toEqual({
+      host: window.location.hostname,
+      port: Number(window.location.port) || (window.location.protocol === "https:" ? 443 : 80),
+      tls: window.location.protocol === "https:",
+      basePath: "/console/admin",
+    })
+    expect(connectionFromBaseUrl("https://api.example.com:9443/admin/")).toEqual({
+      host: "api.example.com",
+      port: 9443,
+      tls: true,
+      basePath: "/admin",
+    })
   })
 
   it("shows a keyless connection string (base URL, no credential) when auth is off", async () => {

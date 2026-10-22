@@ -1,6 +1,8 @@
 export const SDK_VERSION = "0.0.0"
 export * from "./plugin"
 export * from "./client"
+export { readRuntimeConfig } from "./runtimeConfig"
+export type { RuntimeConfig } from "./runtimeConfig"
 export { CapabilityBadges } from "./CapabilityBadges"
 export type { CapabilityBadgesProps } from "./CapabilityBadges"
 export * from "./provider"

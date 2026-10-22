@@ -36,6 +36,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
+  delete window.__FABRIQ_ADMIN_CONFIG__
 })
 
 describe("AuthGate", () => {
@@ -145,6 +146,21 @@ describe("AuthGate", () => {
 
     expect(await screen.findByRole("button", { name: /sign in/i })).toBeInTheDocument()
     expect(getSessionToken()).toBeNull()
+  })
+
+  it("runtime apiUrl is used for the /meta probe", async () => {
+    window.__FABRIQ_ADMIN_CONFIG__ = { apiUrl: "http://fabriq.test/admin" }
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith("/meta")) return jsonResponse(META)
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal("fetch", fetchSpy)
+
+    render(<AuthGate>{() => <div>console-children</div>}</AuthGate>)
+
+    expect(await screen.findByText("console-children")).toBeInTheDocument()
+    expect(String(fetchSpy.mock.calls[0]![0])).toBe("http://fabriq.test/admin/meta")
   })
 
   it("VITE_FABRIQ_DSN set → renders children, no login, no /meta probe", async () => {
