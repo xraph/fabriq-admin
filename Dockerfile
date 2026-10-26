@@ -2,14 +2,16 @@
 
 # The build stage always runs on the builder's own architecture. The output is
 # static files, so both image platforms share one build.
-FROM --platform=$BUILDPLATFORM node:20.18-alpine AS build
+FROM --platform=$BUILDPLATFORM node:26.12-alpine AS build
 WORKDIR /src
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+# Node 25 and later ship without corepack, so pnpm comes from npm. Keep the
+# version in step with "packageManager" in package.json.
+RUN npm install -g pnpm@9.12.0
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm -r build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.30-alpine
 LABEL org.opencontainers.image.source=https://github.com/xraph/fabriq-admin
 
 USER root
