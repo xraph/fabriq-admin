@@ -1,24 +1,25 @@
 #!/bin/sh
-# End-to-end check of the console image. Builds it, runs it read-only next to
-# an echo server standing in for the Fabriq admin API, and asserts the image
-# contract: health, runtime config, base path, SPA fallback, upstream proxy
-# with key injection, and a hard stop on invalid env.
+# Builds the console image and exercises its entrypoint and nginx over HTTP.
 #
 #   sh deploy/docker/smoke.sh
-#
-# Everything it creates is named fabriq-admin-smoke-* and removed on exit.
+#   SMOKE_IMAGE=local-admin-image sh deploy/docker/smoke.sh
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+FIXTURE="$ROOT/deploy/docker/native_request_test.py"
 PORT=${SMOKE_PORT:-18080}
 TAG=$$
-IMAGE=fabriq-admin-smoke:$TAG
+IMAGE=${SMOKE_IMAGE:-fabriq-admin-smoke:$TAG}
+UPSTREAM_IMAGE=${SMOKE_UPSTREAM_IMAGE:-python:3.12-alpine}
 NET=fabriq-admin-smoke-net-$TAG
 UPSTREAM=fabriq-admin-smoke-upstream-$TAG
 CONSOLE=fabriq-admin-smoke-console-$TAG
 BAD=fabriq-admin-smoke-bad-$TAG
-KEY=fq_$(openssl rand -hex 20)
+SMOKE_OPERATOR_KEY=fq_$(openssl rand -hex 20)
+SMOKE_CONTROL_TOKEN=$(openssl rand -hex 32)
+export SMOKE_OPERATOR_KEY SMOKE_CONTROL_TOKEN
 URL=http://127.0.0.1:$PORT
+TMP=$(mktemp -d)
 
 fail() {
   echo "smoke: FAIL: $*" >&2
@@ -27,120 +28,103 @@ fail() {
 
 cleanup() {
   status=$?
-  if [ "$status" -ne 0 ]; then
-    for c in "$CONSOLE" "$BAD" "$UPSTREAM"; do
-      if docker inspect "$c" >/dev/null 2>&1; then
-        echo "--- logs: $c" >&2
-        docker logs "$c" >&2 2>&1 || true
-      fi
-    done
+  docker rm -f "$CONSOLE" "$BAD" "$UPSTREAM" > /dev/null 2>&1 || true
+  docker network rm "$NET" > /dev/null 2>&1 || true
+  if [ -z "${SMOKE_IMAGE:-}" ]; then
+    docker rmi "$IMAGE" > /dev/null 2>&1 || true
   fi
-  docker rm -f "$CONSOLE" "$BAD" "$UPSTREAM" >/dev/null 2>&1 || true
-  docker network rm "$NET" >/dev/null 2>&1 || true
-  docker rmi "$IMAGE" >/dev/null 2>&1 || true
+  rm -rf "$TMP"
   exit "$status"
 }
 trap cleanup EXIT
 trap 'exit 1' INT TERM
 
-echo "smoke: building $IMAGE"
-docker build -q -t "$IMAGE" "$ROOT" >/dev/null
+capture_logs() {
+  docker logs "$1" > "$TMP/container.log" 2>&1 || fail "$2 logs could not be read"
+  for value in "$SMOKE_OPERATOR_KEY" "$SMOKE_CONTROL_TOKEN"; do
+    if grep -Fq -- "$value" "$TMP/container.log"; then
+      fail "$2 logs contain a credential"
+    fi
+  done
+}
 
-docker network create "$NET" >/dev/null
-docker run -d --name "$UPSTREAM" --network "$NET" --network-alias upstream \
-  mendhak/http-https-echo:34 >/dev/null
-
-docker run -d --name "$CONSOLE" --network "$NET" --read-only --tmpfs /tmp \
-  -p "127.0.0.1:$PORT:8080" \
-  -e FABRIQ_ADMIN_UPSTREAM=http://upstream:8080 \
-  -e FABRIQ_ADMIN_UPSTREAM_KEY="$KEY" \
-  -e FABRIQ_ADMIN_BASE_PATH=/console/ \
-  -e FABRIQ_ADMIN_DEFAULT_TENANT=acme \
-  "$IMAGE" >/dev/null
-
-# /healthz only proves nginx is up. The echo server may still be starting, so
-# the proxy checks below retry (see proxy_get).
-i=0
-until curl -fsS "$URL/healthz" >/dev/null 2>&1; do
-  i=$((i + 1))
-  [ "$i" -le 30 ] || fail "console did not become healthy within 30s"
-  sleep 1
-done
-
-# proxy_get <curl args...>: GET through the console, retrying for up to 15s
-# while the upstream answers 502/503/504 or refuses connections.
-proxy_get() {
-  n=0
-  until out=$(curl -fsS "$@" 2>/dev/null); do
-    n=$((n + 1))
-    [ "$n" -le 15 ] || fail "no 2xx from the proxy within 15s: curl $*"
+wait_for() {
+  i=0
+  until curl --max-time 2 -fsS "$1" > /dev/null 2>&1; do
+    i=$((i + 1))
+    [ "$i" -le 30 ] || fail "$2 did not become healthy"
     sleep 1
   done
-  printf '%s' "$out"
 }
 
-# status_of <curl args...>: HTTP status code only
-status_of() {
-  curl -s -o /dev/null -w '%{http_code}' "$@"
+if [ -z "${SMOKE_IMAGE:-}" ]; then
+  echo "smoke: building $IMAGE"
+  docker build -q -t "$IMAGE" "$ROOT" > /dev/null
+fi
+
+docker network create "$NET" > /dev/null
+docker run -d --name "$UPSTREAM" --network "$NET" --network-alias upstream \
+  -p 127.0.0.1::8080 -e SMOKE_OPERATOR_KEY \
+  -v "$FIXTURE:/native_request_test.py:ro" "$UPSTREAM_IMAGE" \
+  python3 /native_request_test.py upstream --host 0.0.0.0 > /dev/null
+UPSTREAM_URL=http://$(docker port "$UPSTREAM" 8080/tcp)
+wait_for "$UPSTREAM_URL/__requests" upstream
+
+run_console() {
+  mode=$1
+  shift
+  docker run -d --name "$CONSOLE" --network "$NET" --read-only --tmpfs /tmp \
+    -p "127.0.0.1:$PORT:8080" \
+    -e FABRIQ_ADMIN_BASE_PATH=/console/ \
+    -e FABRIQ_ADMIN_DEFAULT_TENANT=acme \
+    "$@" "$IMAGE" > /dev/null
+  wait_for "$URL/healthz" "$mode console"
+  [ "$(docker exec "$CONSOLE" id -u)" = "101" ] || fail "$mode console does not run as uid 101"
+  probe_status=0
+  python3 "$FIXTURE" probe "$mode" "$URL" "$UPSTREAM_URL" || probe_status=$?
+  capture_logs "$CONSOLE" "$mode console"
+  [ "$probe_status" -eq 0 ] || exit "$probe_status"
+  docker rm -f "$CONSOLE" > /dev/null
 }
 
-# healthz
-[ "$(curl -sS "$URL/healthz")" = "ok" ] || fail "/healthz body is not ok"
-echo "smoke: ok /healthz"
+run_console gated \
+  -e FABRIQ_ADMIN_UPSTREAM=http://upstream:8080 \
+  -e FABRIQ_ADMIN_UPSTREAM_KEY="$SMOKE_OPERATOR_KEY" \
+  -e FABRIQ_ADMIN_CONTROL_TOKEN="$SMOKE_CONTROL_TOKEN"
+run_console pass-through -e FABRIQ_ADMIN_UPSTREAM=http://upstream:8080
+run_console static
 
-# uid and read-only root
-[ "$(docker exec "$CONSOLE" id -u)" = "101" ] || fail "console does not run as uid 101"
-echo "smoke: ok uid 101 on a read-only root"
+expect_invalid() {
+  label=$1
+  variable=$2
+  shift 2
+  docker run -d --name "$BAD" --network "$NET" --read-only --tmpfs /tmp \
+    "$@" "$IMAGE" > /dev/null
+  i=0
+  until [ "$(docker inspect -f '{{.State.Status}}' "$BAD")" = "exited" ]; do
+    i=$((i + 1))
+    [ "$i" -le 10 ] || fail "$label container did not exit"
+    sleep 1
+  done
+  [ "$(docker inspect -f '{{.State.ExitCode}}' "$BAD")" = "1" ] ||
+    fail "$label container did not exit 1"
+  capture_logs "$BAD" "$label"
+  grep -Fq "$variable" "$TMP/container.log" || fail "$label logs do not name $variable"
+  docker rm "$BAD" > /dev/null
+  echo "smoke: ok startup refusal for $label"
+}
 
-# runtime config
-CONFIG=$(curl -fsS "$URL/config.js")
-case $CONFIG in *'"apiUrl":"/console/admin"'*) ;; *) fail "config.js lacks apiUrl: $CONFIG" ;; esac
-case $CONFIG in *'"defaultTenant":"acme"'*) ;; *) fail "config.js lacks defaultTenant: $CONFIG" ;; esac
-case $CONFIG in *"$KEY"*) fail "config.js leaks the upstream key" ;; esac
-curl -fsSI "$URL/config.js" | grep -qi '^cache-control: no-store' || fail "config.js is cacheable"
-echo "smoke: ok /config.js"
+expect_invalid "invalid base path" FABRIQ_ADMIN_BASE_PATH -e FABRIQ_ADMIN_BASE_PATH=bad
+expect_invalid "missing control token" FABRIQ_ADMIN_CONTROL_TOKEN \
+  -e FABRIQ_ADMIN_UPSTREAM=http://upstream:8080 \
+  -e FABRIQ_ADMIN_UPSTREAM_KEY="$SMOKE_OPERATOR_KEY"
+expect_invalid "malformed control token" FABRIQ_ADMIN_CONTROL_TOKEN \
+  -e FABRIQ_ADMIN_UPSTREAM=http://upstream:8080 \
+  -e FABRIQ_ADMIN_UPSTREAM_KEY="$SMOKE_OPERATOR_KEY" \
+  -e FABRIQ_ADMIN_CONTROL_TOKEN="${SMOKE_CONTROL_TOKEN}x"
+expect_invalid "control token without an operator key" FABRIQ_ADMIN_CONTROL_TOKEN \
+  -e FABRIQ_ADMIN_UPSTREAM=http://upstream:8080 \
+  -e FABRIQ_ADMIN_CONTROL_TOKEN="$SMOKE_CONTROL_TOKEN"
 
-# base path and SPA fallback
-for p in / /entities/x; do
-  BODY=$(curl -fsS "$URL$p")
-  case $BODY in *'<base href="/console/"'*) ;; *) fail "$p lacks <base href=\"/console/\">" ;; esac
-done
-curl -fsSI "$URL/entities/x" | grep -qi '^cache-control: no-store' || fail "the SPA fallback is cacheable"
-echo "smoke: ok base path and no-store on / and /entities/x"
-
-# built assets
-ASSET=$(curl -fsS "$URL/" | grep -o 'assets/[A-Za-z0-9._-]*\.js' | head -n 1)
-[ -n "$ASSET" ] || fail "no asset found in index.html"
-[ "$(curl -s -o /dev/null -w '%{http_code}' "$URL/$ASSET")" = "200" ] || fail "$ASSET is not served"
-curl -fsSI "$URL/$ASSET" | grep -qi '^cache-control: public, max-age=31536000, immutable' || fail "$ASSET is not immutable"
-echo "smoke: ok $ASSET"
-
-# proxy: path kept, client Authorization replaced by the configured key, and
-# the client's Cookie never forwarded
-ECHO=$(proxy_get -H 'Authorization: Bearer wrong' -H 'Cookie: s=secret' "$URL/admin/meta")
-[ "$(printf '%s' "$ECHO" | jq -r .path)" = "/admin/meta" ] || fail "upstream saw the wrong path: $ECHO"
-[ "$(printf '%s' "$ECHO" | jq -r .headers.authorization)" = "Bearer $KEY" ] || fail "upstream saw the wrong authorization: $ECHO"
-[ "$(printf '%s' "$ECHO" | jq -r .headers.cookie)" = "null" ] || fail "upstream saw a cookie: $ECHO"
-echo "smoke: ok /admin/ proxy with key injection and no cookies"
-
-# cross-site and same-site requests are refused while a key is injected
-[ "$(status_of -H 'Sec-Fetch-Site: cross-site' "$URL/admin/meta")" = "403" ] || fail "cross-site request was not refused"
-[ "$(status_of -H 'Sec-Fetch-Site: same-site' "$URL/admin/meta")" = "403" ] || fail "same-site request was not refused"
-proxy_get -H 'Sec-Fetch-Site: same-origin' "$URL/admin/meta" >/dev/null
-proxy_get "$URL/admin/meta" >/dev/null
-echo "smoke: ok Sec-Fetch-Site 403 for cross-site and same-site, 200 for same-origin and none"
-
-# invalid env must stop the container before nginx starts
-docker run -d --name "$BAD" -e FABRIQ_ADMIN_BASE_PATH=bad "$IMAGE" >/dev/null
-i=0
-until [ "$(docker inspect -f '{{.State.Status}}' "$BAD")" = "exited" ]; do
-  i=$((i + 1))
-  [ "$i" -le 10 ] || fail "container with an invalid base path was still running after 10s"
-  sleep 1
-done
-CODE=$(docker inspect -f '{{.State.ExitCode}}' "$BAD")
-[ "$CODE" = "1" ] || fail "container with an invalid base path exited $CODE, wanted 1"
-docker logs "$BAD" 2>&1 | grep -q FABRIQ_ADMIN_BASE_PATH || fail "the logs do not name FABRIQ_ADMIN_BASE_PATH"
-echo "smoke: ok invalid FABRIQ_ADMIN_BASE_PATH exits 1 and is named in the logs"
-
+capture_logs "$UPSTREAM" upstream
 echo "smoke: ok"

@@ -6,7 +6,7 @@
 #   index.html    the built index.html with <base href> set to the base path
 #   upstream.conf nginx location block proxying /admin/ (empty without upstream)
 #
-# Any invalid value prints to stderr and exits 1, which stops the container
+# Invalid settings report the variable name and exit 1, which stops the container
 # before nginx starts. POSIX sh; runs the same under busybox, GNU and BSD tools.
 set -eu
 
@@ -16,6 +16,7 @@ HTML_DIR=${FABRIQ_ADMIN_HTML_DIR:-/usr/share/nginx/html}
 BASE_PATH=${FABRIQ_ADMIN_BASE_PATH:-/}
 UPSTREAM=${FABRIQ_ADMIN_UPSTREAM:-}
 UPSTREAM_KEY=${FABRIQ_ADMIN_UPSTREAM_KEY:-}
+CONTROL_TOKEN=${FABRIQ_ADMIN_CONTROL_TOKEN:-}
 API_URL=${FABRIQ_ADMIN_API_URL:-}
 DEFAULT_TENANT=${FABRIQ_ADMIN_DEFAULT_TENANT:-}
 MAP_STYLE_URL=${FABRIQ_ADMIN_MAP_STYLE_URL:-}
@@ -35,7 +36,7 @@ check() {
   case $2 in
     *"$NL"*) fail "$1 must not contain a newline" ;;
   esac
-  printf '%s\n' "$2" | grep -Eq "$3" || fail "$1 must be $4"
+  printf '%s\n' "$2" | LC_ALL=C grep -Eq "$3" || fail "$1 must be $4"
 }
 
 check FABRIQ_ADMIN_BASE_PATH "$BASE_PATH" '^/([A-Za-z0-9._~-]+/)*$' \
@@ -54,6 +55,10 @@ if [ -n "$UPSTREAM_KEY" ]; then
   [ -n "$UPSTREAM" ] || fail "FABRIQ_ADMIN_UPSTREAM_KEY requires FABRIQ_ADMIN_UPSTREAM"
   check FABRIQ_ADMIN_UPSTREAM_KEY "$UPSTREAM_KEY" '^fq_[0-9A-Za-z]{32,}$' \
     'fq_ followed by at least 32 letters or digits'
+  check FABRIQ_ADMIN_CONTROL_TOKEN "$CONTROL_TOKEN" '^[0-9a-f]{64}$' \
+    'exactly 64 lowercase hexadecimal characters'
+elif [ "${FABRIQ_ADMIN_CONTROL_TOKEN+x}" = x ]; then
+  fail "FABRIQ_ADMIN_CONTROL_TOKEN requires FABRIQ_ADMIN_UPSTREAM_KEY and FABRIQ_ADMIN_UPSTREAM"
 fi
 
 if [ -n "$API_URL" ]; then
@@ -81,6 +86,13 @@ grep -Fq '<base href="/"' "$HTML_DIR/index.html" ||
   fail "$HTML_DIR/index.html (FABRIQ_ADMIN_HTML_DIR) has no <base href=\"/\"> to rewrite"
 
 mkdir -p "$RUNTIME_DIR"
+RUNTIME_DIR=$(CDPATH='' cd -P "$RUNTIME_DIR" && pwd -P)
+HTML_ROOT=$(CDPATH='' cd -P "$HTML_DIR" && pwd -P)
+case "$RUNTIME_DIR/" in
+  "${HTML_ROOT%/}/"* | /usr/share/nginx/html/*)
+    fail "FABRIQ_ADMIN_RUNTIME_DIR must be outside the nginx document root"
+    ;;
+esac
 
 # config.js
 CONFIG=$(jq -cn \
@@ -97,17 +109,11 @@ printf 'window.__FABRIQ_ADMIN_CONFIG__ = %s;\n' "$CONFIG" > "$RUNTIME_DIR/config
 # index.html: the base path only holds [A-Za-z0-9._~/-], so | is a safe delimiter.
 sed "s|<base href=\"/\"|<base href=\"${BASE_PATH}\"|" "$HTML_DIR/index.html" > "$RUNTIME_DIR/index.html"
 
-# upstream.conf: empty unless an upstream is set.
-#
-# The block is hardened for a bearer-only API behind a browser console:
-#   - Cookie is always cleared, so a session cookie from a fronting proxy never
-#     reaches Fabriq.
-#   - Uploads are base64 JSON, so the body size limit and request buffering are
-#     off (the 1 MB default would answer 413).
-#   - With a key, Authorization is always replaced, so a client cannot send its
-#     own credentials through, and requests the browser marks as cross-site or
-#     same-site are refused (403), so another site cannot borrow the key.
-: > "$RUNTIME_DIR/upstream.conf"
+# mktemp keeps the credentials readable by the nginx user only, including
+# while replacing the previous configuration.
+PRIVATE_CONF=$(mktemp "$RUNTIME_DIR/.upstream.XXXXXX")
+trap 'rm -f "$PRIVATE_CONF"' EXIT
+
 if [ -n "$UPSTREAM" ]; then
   {
     printf 'location /admin/ {\n'
@@ -116,19 +122,33 @@ if [ -n "$UPSTREAM" ]; then
       https://*) printf '  proxy_ssl_server_name on;\n' ;;
     esac
     printf '  proxy_http_version 1.1;\n'
+    # nginx expands this variable at request time.
+    # shellcheck disable=SC2016
     printf '  proxy_set_header Host $proxy_host;\n'
     printf '  proxy_set_header Connection "";\n'
     printf '  proxy_set_header Cookie "";\n'
+    printf '  proxy_set_header X-Fabriq-Control-Token "";\n'
+    printf '  proxy_hide_header X-Fabriq-Control-Token;\n'
+    # Keep base64 JSON uploads and streaming responses unbuffered.
     printf '  proxy_buffering off;\n'
     printf '  proxy_request_buffering off;\n'
     printf '  client_max_body_size 0;\n'
     printf '  proxy_read_timeout 3600s;\n'
     if [ -n "$UPSTREAM_KEY" ]; then
-      printf '  if ($http_sec_fetch_site ~ "^(cross-site|same-site)$") {\n'
+      # nginx combines duplicate field lines with a comma and space.
+      # nginx reads the request header from this variable.
+      # shellcheck disable=SC2016
+      printf '  if ($http_x_fabriq_control_token != "%s") {\n' "$CONTROL_TOKEN"
+      printf '    return 403;\n'
+      printf '  }\n'
+      # nginx expands its header variable and interprets the regex anchor.
+      # shellcheck disable=SC2016
+      printf '  if ($http_sec_fetch_site ~ "(^|,[[:blank:]]*)(cross-site|same-site)([[:blank:]]*,|$)") {\n'
       printf '    return 403;\n'
       printf '  }\n'
       printf '  proxy_set_header Authorization "Bearer %s";\n' "$UPSTREAM_KEY"
     fi
     printf '}\n'
-  } > "$RUNTIME_DIR/upstream.conf"
+  } > "$PRIVATE_CONF"
 fi
+mv -f "$PRIVATE_CONF" "$RUNTIME_DIR/upstream.conf"

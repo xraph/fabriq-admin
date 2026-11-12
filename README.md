@@ -203,7 +203,22 @@ The container always serves from `/`. If you run it behind a proxy under a prefi
 
 It listens on 8080, runs as uid 101, and only needs `/tmp` to be writable, so `--read-only --tmpfs /tmp` works. `GET /healthz` returns `ok`.
 
-To build it yourself, run `docker build -t fabriq-admin .` from the repo root. `sh deploy/docker/smoke.sh` builds the image and checks the whole contract against an echo server.
+### Check a local container build
+
+Run these from the repo root. The entrypoint tests need `jq`. The smoke test
+uses Docker and Python 3 to make real HTTP requests through nginx.
+
+```bash
+sh deploy/docker/entrypoint_test.sh
+docker build -t fabriq-admin .
+SMOKE_IMAGE=fabriq-admin sh deploy/docker/smoke.sh
+```
+
+If you set `FABRIQ_ADMIN_UPSTREAM_KEY` in this build, set
+`FABRIQ_ADMIN_CONTROL_TOKEN` to a separate secret of 64 lowercase hex characters.
+Generate one with `openssl rand -hex 32`. Your fronting proxy sends it in
+`X-Fabriq-Control-Token` on API requests. Keep it out of the browser. To let
+clients supply their own Authorization, leave both variables unset.
 
 ---
 

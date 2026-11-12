@@ -15,8 +15,14 @@ FAIL=0
 RC=0
 RUNTIME=""
 
-ok() { PASS=$((PASS + 1)); printf 'PASS  %s\n' "$1"; }
-bad() { FAIL=$((FAIL + 1)); printf 'FAIL  %s\n' "$1"; }
+ok() {
+  PASS=$((PASS + 1))
+  printf 'PASS  %s\n' "$1"
+}
+bad() {
+  FAIL=$((FAIL + 1))
+  printf 'FAIL  %s\n' "$1"
+}
 
 # run_script <env assignments...>: fresh html and runtime dirs, then the script
 # under a clean environment. Sets RC, RUNTIME and $TMP/stderr.
@@ -32,22 +38,32 @@ run_script() {
   RC=$?
 }
 
-expect_exit() { # <case> <code>; a failure must also name the offending variable
-  if [ "$RC" -ne "$2" ]; then bad "$1: exit $RC, wanted $2 ($(cat "$TMP/stderr"))"
-  elif [ "$2" -ne 0 ] && ! grep -Fq 'FABRIQ_ADMIN_' "$TMP/stderr"; then bad "$1: exit $2 but stderr names no variable ($(cat "$TMP/stderr"))"
+expect_exit() { # <case> <code> [offending variable]
+  if [ "$RC" -ne "$2" ]; then
+    bad "$1: exit $RC, wanted $2"
+  elif [ "$2" -ne 0 ] && ! grep -Fq "${3:-FABRIQ_ADMIN_}" "$TMP/stderr"; then
+    bad "$1: exit $2 but stderr does not name ${3:-a variable}"
   else ok "$1: exit $2"; fi
 }
 expect_has() { # <case> <file> <literal>
-  if grep -Fq -- "$3" "$2" 2>/dev/null; then ok "$1: $(basename "$2") has $3"; else bad "$1: $(basename "$2") lacks $3"; fi
+  if grep -Fq -- "$3" "$2" 2> /dev/null; then ok "$1: $(basename "$2") contains expected text"; else bad "$1: $(basename "$2") lacks expected text"; fi
 }
 expect_lacks() { # <case> <file> <literal>
-  if grep -Fq -- "$3" "$2" 2>/dev/null; then bad "$1: $(basename "$2") has $3"; else ok "$1: $(basename "$2") lacks $3"; fi
+  if grep -Fq -- "$3" "$2" 2> /dev/null; then bad "$1: $(basename "$2") contains forbidden text"; else ok "$1: $(basename "$2") lacks forbidden text"; fi
 }
 expect_empty() { # <case> <file>
   if [ -f "$2" ] && [ ! -s "$2" ]; then ok "$1: $(basename "$2") is empty"; else bad "$1: $(basename "$2") is not empty"; fi
 }
 
 VALID_KEY=fq_0123456789abcdefghijklmnopqrstuv
+VALID_TOKEN=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+expect_private() {
+  for file in "$TMP/stdout" "$TMP/stderr" "$RUNTIME/config.js" "$RUNTIME/index.html"; do
+    expect_lacks "$1" "$file" "$VALID_TOKEN"
+    expect_lacks "$1" "$file" "$VALID_KEY"
+  done
+}
 
 # defaults
 run_script
@@ -67,15 +83,25 @@ expect_lacks upstream "$RUNTIME/upstream.conf" 'Authorization'
 expect_has upstream "$RUNTIME/upstream.conf" 'client_max_body_size 0;'
 expect_has upstream "$RUNTIME/upstream.conf" 'proxy_request_buffering off;'
 expect_has upstream "$RUNTIME/upstream.conf" 'proxy_set_header Cookie "";'
+expect_has upstream "$RUNTIME/upstream.conf" 'proxy_set_header X-Fabriq-Control-Token "";'
+expect_has upstream "$RUNTIME/upstream.conf" 'proxy_hide_header X-Fabriq-Control-Token;'
 expect_lacks upstream "$RUNTIME/upstream.conf" 'sec_fetch_site'
 expect_lacks upstream "$RUNTIME/upstream.conf" 'proxy_ssl_server_name'
 
 # upstream-key
-run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY=$VALID_KEY
+run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY="$VALID_KEY" \
+  FABRIQ_ADMIN_CONTROL_TOKEN="$VALID_TOKEN"
 expect_exit upstream-key 0
 expect_has upstream-key "$RUNTIME/upstream.conf" "proxy_set_header Authorization \"Bearer $VALID_KEY\";"
-expect_has upstream-key "$RUNTIME/upstream.conf" 'if ($http_sec_fetch_site ~ "^(cross-site|same-site)$") {'
+expect_has upstream-key "$RUNTIME/upstream.conf" '(cross-site|same-site)'
 expect_has upstream-key "$RUNTIME/upstream.conf" 'proxy_set_header Cookie "";'
+expect_has upstream-key "$RUNTIME/upstream.conf" 'proxy_set_header X-Fabriq-Control-Token "";'
+expect_has upstream-key "$RUNTIME/upstream.conf" 'proxy_hide_header X-Fabriq-Control-Token;'
+expect_private upstream-key
+case $(LC_ALL=C ls -ld "$RUNTIME/upstream.conf") in
+  -rw-------*) ok 'upstream-key: upstream.conf permissions' ;;
+  *) bad 'upstream-key: upstream.conf must be readable and writable by its owner only' ;;
+esac
 
 # https upstream: SNI on
 run_script FABRIQ_ADMIN_UPSTREAM=https://fabriq.example.com
@@ -118,13 +144,57 @@ expect_exit bad-upstream 1
 # bad-key
 run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY='fq_abc;'
 expect_exit bad-key 1
-run_script FABRIQ_ADMIN_UPSTREAM_KEY=$VALID_KEY
+run_script FABRIQ_ADMIN_UPSTREAM_KEY="$VALID_KEY"
 expect_exit bad-key-without-upstream 1
+
+run_script FABRIQ_ADMIN_UPSTREAM_KEY="$VALID_KEY" FABRIQ_ADMIN_CONTROL_TOKEN="$VALID_TOKEN"
+expect_exit token-and-key-without-upstream 1 FABRIQ_ADMIN_UPSTREAM
+expect_private token-and-key-without-upstream
+
+run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_CONTROL_TOKEN="$VALID_TOKEN"
+expect_exit token-without-key 1 FABRIQ_ADMIN_CONTROL_TOKEN
+expect_private token-without-key
+
+run_script FABRIQ_ADMIN_CONTROL_TOKEN="$VALID_TOKEN"
+expect_exit token-in-static-mode 1 FABRIQ_ADMIN_CONTROL_TOKEN
+expect_private token-in-static-mode
+
+run_script FABRIQ_ADMIN_CONTROL_TOKEN=
+expect_exit empty-token-in-static-mode 1 FABRIQ_ADMIN_CONTROL_TOKEN
+
+run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY="$VALID_KEY"
+expect_exit missing-token 1 FABRIQ_ADMIN_CONTROL_TOKEN
+expect_private missing-token
+
+for value in "" bad-token-value "${VALID_TOKEN%?}" "${VALID_TOKEN}a" \
+  "A${VALID_TOKEN#?}" "${VALID_TOKEN} " " ${VALID_TOKEN%?}" "$VALID_KEY"; do
+  run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY="$VALID_KEY" \
+    FABRIQ_ADMIN_CONTROL_TOKEN="$value"
+  expect_exit malformed-token 1 FABRIQ_ADMIN_CONTROL_TOKEN
+  expect_private malformed-token
+  if [ -n "$value" ]; then
+    expect_lacks malformed-token "$TMP/stderr" "$value"
+  fi
+done
 
 # bad-newline: a valid-looking value followed by a newline and more text must
 # be rejected, because grep matches line by line.
 NL='
 '
+run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY="$VALID_KEY" \
+  FABRIQ_ADMIN_CONTROL_TOKEN="$VALID_TOKEN${NL}x"
+expect_exit bad-newline-token 1 FABRIQ_ADMIN_CONTROL_TOKEN
+expect_private bad-newline-token
+
+run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY="$VALID_KEY" \
+  FABRIQ_ADMIN_CONTROL_TOKEN="$VALID_TOKEN" FABRIQ_ADMIN_RUNTIME_DIR="$TMP/html/runtime"
+expect_exit runtime-in-document-root 1 FABRIQ_ADMIN_RUNTIME_DIR
+if [ -e "$TMP/html/runtime/upstream.conf" ]; then
+  bad 'runtime-in-document-root: generated proxy configuration in the document root'
+else
+  ok 'runtime-in-document-root: proxy configuration was never written'
+fi
+
 run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY="$VALID_KEY${NL}x"
 expect_exit bad-newline-key 1
 run_script FABRIQ_ADMIN_UPSTREAM="http://fabriq:8081${NL}x"
@@ -138,6 +208,8 @@ expect_exit bad-newline-tenant 1
 # value that is written into the nginx config or the index.html rewrite.
 CR=$(printf '\r')
 n=0
+# Include a literal backslash among the rejected inputs.
+# shellcheck disable=SC1003
 for c in '"' "'" ';' ' ' '$' '{' '}' '\' "$CR"; do
   n=$((n + 1))
   run_script FABRIQ_ADMIN_UPSTREAM=http://fabriq:8081 FABRIQ_ADMIN_UPSTREAM_KEY="$VALID_KEY$c"
